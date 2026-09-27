@@ -33,11 +33,11 @@ Use Microsoft Agent Framework workflows for explicit agent and function
 composition, but keep correctness-critical control flow in deterministic C#.
 Use the GitHub Copilot SDK as the first agent backend behind an interface so
 local OpenShift-hosted models and Azure-hosted agents can be added later.
-Install a pinned Crow APM package in each runner image. Install only the
-selected Raven capability groups from a verified, platform-specific Raven
-release bundle; expose an allowlisted, read-only subset of credential-bearing
-Raven MCP tools only from the trusted integration worker. Runners receive
-normalized source-control and pipeline observations as immutable snapshots.
+Install a pinned Crow APM package in each runner image. Install and verify the
+complete Raven bundle as a unit, then configure and expose only the selected,
+allowlisted Raven servers/tools from the trusted integration worker. Runners
+receive normalized source-control and pipeline observations as immutable
+snapshots.
 
 Model two independent provider assignments for every application:
 
@@ -966,12 +966,20 @@ deadline, cleanup, and Job-controller settings.
 Rook's acceptance criteria are:
 
 - each attempt gets a fresh immutable execution boundary and workspace;
-- repository-controlled commands run only in the credential-free verifier;
-- Copilot access is brokered and scoped to the run; the runner has no provider
-  write, Raven, database, or administrative credentials;
+- repository-controlled commands run only in the separate credential-free
+  verifier Job, never in the control plane or agent runner;
+- neither the runner nor verifier may use host mounts, a container socket, or
+  an ambient/default service-account token; workload identity is short-lived,
+  audience-restricted, and explicitly projected;
+- the runner has no provider write, Raven, database, or administrative
+  credentials. Copilot access is brokered and scoped to the run;
+- the verifier has no route to the control plane, Copilot broker, model
+  credentials, repository/provider credentials, database, or integration
+  workers, and holds no signing or reporting credential;
+- the control plane creates runner and verifier Jobs only from a fixed,
+  server-owned template with validated parameters; repository content cannot
+  choose a privileged workload or namespace;
 - model-visible tools are deny-by-default and independently authorized;
-- runner and verifier identities are short-lived, audience-restricted, and
-  unable to impersonate another run;
 - cancellation, deadline, evidence extraction, cleanup, and replay rejection
   are observable and tested.
 
@@ -1032,7 +1040,7 @@ policy assumptions before production.
 | Deployment consistency and rollback | 10% | 5 | 4 |
 | Operational resilience and recovery | 15% | 2 | 4 |
 | Scale and concurrency | 10% | 3 | 5 |
-| **Weighted score** | **100%** | **4.15** | **4.05** |
+| **Weighted score** | **100%** | **4.35** | **3.95** |
 
 The MVP choice prioritizes Emerald's SDN-backed isolation and implementation
 simplicity. The external database becomes the target once measured workload,

@@ -1,10 +1,20 @@
 # Rook Orchestration Framework Plan
 
 **Status:** Proposed  
-**Date:** 2026-08-31  
+**Date:** 2026-09-27
 **Initial scale:** 25-100 repositories with continuous daily maintenance  
 **Initial autonomy:** Create draft pull requests; humans approve and merge  
 **System of record:** Rook owns orchestration state and optionally references JARVIS application records
+
+**External baseline reviewed:** Crow `main` and Raven `main` on 2026-09-27.
+The implementation must pin a released Crow package and an attested Raven
+bundle rather than treating either repository's moving branch as a runtime
+dependency. Current public baseline examples are Crow `v0.9.3` and Raven suite
+`0.1.0`; these are evidence of the packaging contracts, not an approval to
+ship those exact versions. Raven's release-bundle/catalog contract is still a
+pre-stable integration surface: revalidate the suite and per-server versions,
+catalog schema, platform support, attestation, and security status at
+implementation time.
 
 ## 1. Executive recommendation
 
@@ -23,29 +33,35 @@ Use Microsoft Agent Framework workflows for explicit agent and function
 composition, but keep correctness-critical control flow in deterministic C#.
 Use the GitHub Copilot SDK as the first agent backend behind an interface so
 local OpenShift-hosted models and Azure-hosted agents can be added later.
-Install a pinned Crow release in each runner. Expose an allowlisted, read-only
-subset of credential-bearing Raven MCP tools only from the trusted integration
-worker; runners receive normalized source-control and pipeline observations as
-immutable snapshots.
+Install a pinned Crow APM package in each runner image. Install and verify the
+complete Raven bundle as a unit, then configure and expose only the selected,
+allowlisted Raven servers/tools from the trusted integration worker. Runners
+receive normalized source-control and pipeline observations as immutable
+snapshots.
 
 Model two independent provider assignments for every application:
 
 - an **SCM provider** for source, branches, commits, and pull requests:
-  on-premises Azure DevOps Server, GitHub, or Bitbucket; and
-- zero or more **CI/CD pipeline providers**: Azure DevOps Pipelines, GitHub
-  Actions, or Jenkins for the subset of applications that use it.
+  GitHub first, followed by on-premises Azure DevOps Server and later
+  Bitbucket; and
+- zero or more **CI/CD pipeline providers**: GitHub Actions first, followed by
+  Azure DevOps Pipelines and later Jenkins for the subset of applications that
+  use it.
 
-The pilot starts with on-premises Azure DevOps Server for SCM, pull requests,
-and Azure DevOps Pipelines. GitHub and Bitbucket source adapters and GitHub
-Actions/Jenkins pipeline adapters follow behind the same contracts.
+The MVP starts with GitHub for SCM, pull requests, and GitHub Actions.
+On-premises Azure DevOps Server and Azure DevOps Pipelines follow closely once
+the MVP is running. Bitbucket and Jenkins remain later adapters behind the same
+contracts.
 
-Host the MVP in **OpenShift Gold with a shared PostgreSQL database on a VM**.
-OpenShift provides the strongest fit for per-run isolation, bounded resources,
-network policy, horizontal worker capacity, and repeatable deployment.
-PostgreSQL is preferred for the new Rook-owned state store. The Windows
-VM/shared MSSQL option is viable for a short feasibility prototype, but its
-JARVIS-like deployment model does not provide the isolation and elastic job
-execution needed for unattended maintenance across 25-100 repositories.
+Host the MVP in **OpenShift Emerald with a single PostgreSQL instance inside
+the cluster**. Emerald's SDN integration and stronger network isolation fit
+Rook's requirement that runner, verifier, control-plane, database, and
+integration-worker paths be explicitly allowlisted. Gold's default-allow
+network-policy posture is not suitable for Rook's MVP security baseline.
+Keep the in-cluster database deliberately simple for the proof-of-value, with
+documented backup/restore and data-loss limitations. After the MVP proves
+functional and operational viability, migrate PostgreSQL to an external
+VM-hosted service through a tested expand/migrate/contract procedure.
 
 Do not make unattended scheduling generally available until a feasibility
 spike proves that a developer-owned GitHub Copilot subscription can be used
@@ -68,12 +84,13 @@ the run in `Blocked`, never silently switch identity or model.
   evidence.
 - Support both manual priority decisions and explainable scored priority.
 - Read each application's configured CI/CD provider state and normalize it into
-  the application status record; Jenkins is optional, not assumed.
-- Support source repositories in on-premises Azure DevOps Server, GitHub, and
-  Bitbucket independently of the application's CI/CD provider.
+  the application status record; the MVP starts with GitHub Actions.
+- Support GitHub repositories and GitHub Actions independently, followed
+  closely by on-premises Azure DevOps Server and Azure DevOps Pipelines.
 - Make agent, model, Crow, Raven, workflow, and policy versions reproducible
   for every run.
-- Add local and Azure agent backends without rewriting workflow policy.
+- Preserve a provider-neutral workflow policy so later agent backends can be
+  added without rewriting orchestration policy.
 
 ### 2.2 Non-goals for the MVP
 
@@ -116,6 +133,22 @@ the run in `Blocked`, never silently switch identity or model.
     evidence, prompts, logs, reports, and database fields preserve Unicode and
     use UTF-8 interchange. Identifier security rules are separate from
     user-supplied display text.
+11. **Common capabilities before custom code.** Describe the capability first,
+    search the current B.C. common-component catalogue, DevHub, and existing
+    ministry capabilities, then record reuse, adaptation, or build with owner,
+    support, data, accessibility, availability, cost, roadmap, and exit-path
+    evidence. Absence from one catalogue is `Unknown`, not proof of absence.
+12. **GaaP and architecture guardrails are enforceable.** GaaP here means
+    Government as a Platform, not accounting GAAP. Prefer secure defaults,
+    explicit contracts, least privilege, accessibility, observable and reversible
+    changes, bounded resource use, clear ownership, and deterministic
+    validation. These are acceptance criteria at each boundary, not a
+    retrospective checklist.
+13. **Zero Trust applies to every protected operation.** Network location,
+    prior authentication, repository ownership, branch state, model intent,
+    or a Raven response never establishes authorization. Evaluate subject,
+    action, resource, workload evidence, context, assurance, scope, duration,
+    revocation, enforcement, telemetry, and time-bound exceptions explicitly.
 
 These principles align with Crow's separation of agent decisions, routed skill
 knowledge, stable templates, and deterministic scripts. They also incorporate
@@ -134,11 +167,12 @@ flowchart LR
     Control -->|Trusted integration workers| Raven[Raven MCP servers]
     Control -->|Create constrained Job| Runner[Rook runner pod]
     Runner -->|Agent Framework| Copilot[GitHub Copilot SDK]
-    Runner -->|Pinned package| Crow[Crow agents and skills]
+    Runner -->|Pinned APM package| Crow[Crow agents and skills]
+    Control -->|Verified release bundle| RavenPkg[Raven bundle/catalog/SBOM]
     Runner -->|Credential-free local MCP only| LocalMcp[Allowlisted local MCP servers]
     Runner -->|Run-scoped progress and evidence upload| Control
-    Control -->|SCM adapters: clone metadata and publish PR| Scm[ADO Server / GitHub / Bitbucket]
-    Raven -->|Read-only pipeline state| Ci[ADO Pipelines / GitHub Actions / optional Jenkins]
+    Control -->|SCM adapters: clone metadata and publish PR| Scm[GitHub / ADO Server / Bitbucket]
+    Raven -->|Read-only pipeline observations| Ci[GitHub Actions / ADO Pipelines / optional Jenkins]
     Control -.->|Optional application reference| Jarvis[JARVIS]
     Runner -->|Spans, logs, metrics| Telemetry[OpenTelemetry backend]
 ```
@@ -256,36 +290,138 @@ capabilities Rook needs:
 - report usage and model identity;
 - cancel and dispose the session.
 
-Initial implementation:
-
-- `GitHubCopilotAgentBackend` using
-  `Microsoft.Agents.AI.GitHub.Copilot`.
-
-Future implementations:
-
-- local OpenShift model/agent backend;
-- Azure/Foundry agent backend.
+Initial implementation is a Copilot SDK adapter using
+`Microsoft.Agents.AI.GitHub.Copilot`. Do not design or implement local,
+Azure/Foundry, or multi-backend routing until a later phase has a measured
+need and an approved provider contract.
 
 Do not abstract MCP, tools, or provider-specific configuration prematurely.
 Store the backend type and provider-specific, non-secret configuration as a
 versioned policy document. Workflows consume Rook's typed step interface rather
 than a provider SDK directly.
 
-### 5.4 Crow integration
+### 5.4 Crow integration and package lifecycle
 
-- Package Crow at a pinned release and checksum in the runner image.
-- Resolve an approved workflow manifest to exact Crow agent, skill, module,
-  template, and deterministic script versions.
-- Use Crow agents for architecture/security assessment, remediation, and
-  independent review.
-- Keep Crow's deterministic scripts as mandatory gates where applicable.
-- Record the Crow package version and content digest in every run and PR.
+Crow is a governed package of agents, routed skills, detection modules,
+templates, and deterministic scripts. The package separates knowledge from
+execution: agents own decisions and failure behavior, skills route only the
+needed context, modules hold optional policy, templates hold stable output
+shapes, and scripts perform repeatable validation, rendering, packaging, and
+release work.
+
+**Production delivery**
+
+- Build the runner image from a versioned Crow APM package (or a reviewed
+  integrity-checked archive) at image-build time. The current public package
+  example is `bcgov/crow#v0.9.3`; resolve the approved version through release
+  policy and record its ref, archive digest, and content manifest.
+- Prefer a locally packed Crow archive with its recorded SHA-256, or pin the
+  APM CLI version and installer digest as part of the image build. Never run a
+  moving `aka.ms/apm-*` installer or install from an unlocked moving ref in a
+  production build.
+- Use the `copilot` APM target for Rook's Copilot-backed runner. The Copilot
+  CLI plugin is a useful local-development option, not a reason to install or
+  update packages at run time.
+- Keep the package cache and client profile separate from any Crow checkout.
+  Do not run `apm update`, plugin installation, or arbitrary package resolution
+  in a production runner. Updates are explicit, reviewed, canaried, and
+  rollbackable.
+- Resolve a Rook workflow manifest to exact agent, skill, module, template, and
+  deterministic-script versions. Record the manifest, Crow package version,
+  content digest, and selected capability list in every run and published PR.
 - Do not load skills, agents, hooks, or executable configuration from a target
-  repository unless explicitly approved during onboarding.
-- Treat a Crow upgrade as a controlled Rook dependency change with regression
-  tests against representative repositories. Canary upgrades must also verify
-  finding fingerprint aliases so an updated tool does not duplicate or orphan
-  existing findings.
+  repository. A repository `crow.config` may provide public project-memory
+  references only; it never grants tools, credentials, policy authority, or
+  trust.
+
+Crow owns the agent and skill catalogue, routing rules, module contents,
+templates, deterministic scripts, and maintainer workflows. Rook must not
+reproduce that catalogue or its internal routing logic. Rook stores only a
+versioned workflow manifest that selects an approved Crow capability and
+records its package/content digest. Maintainer-only package, release, Raven
+setup, and agent/skill authoring workflows are not available to ordinary
+target-repository remediation runs.
+
+**Agent update policy**
+
+- Treat Crow changes as dependency changes with targeted unit, contract,
+  sandbox, and representative-repository evaluation in Crow's release
+  process; Rook's gate is to verify the approved package/content digest and
+  run its representative compatibility suite.
+- Prove in Phase 0 that the selected Microsoft Agent Framework/Copilot SDK
+  path can discover the approved immutable Crow package. The exact adapter
+  packaging remains an implementation detail of the selected SDK path.
+- Canary changes against finding fingerprints, evidence schemas, report
+  formats, generated business-rule identifiers, and reviewer acceptance before
+  fleet rollout.
+- Use the Crow release policy for semantic version classification and explicit
+  approval of major releases. Keep the prior package and manifest available for
+  immediate rollback.
+- Use cross-family/model review only as an independent quality signal; it never
+  replaces deterministic gates or human approval for consequential writes.
+
+### 5.4.1 Raven release-bundle integration
+
+Raven is an integration adapter and MCP server suite, not Rook's workflow
+engine. Rook consumes only the selected, allowlisted Raven capabilities from
+Raven's verified release-bundle contract. Raven owns its server catalog,
+package layout, launchers, protocol details, tool inventory, authentication
+mechanisms, and release process.
+
+Rook's integration contract is limited to:
+
+- verify the approved bundle provenance and content digest before provisioning;
+- generate a Rook-owned configuration for explicitly selected servers;
+- run credential-bearing servers only in the trusted integration worker;
+- pass noninteractive provider credentials through the platform secret
+  manager, never through runners, prompts, or repository content;
+- authorize each tool call independently of Raven metadata or model intent;
+- record bundle/configuration provenance and fail closed when a required
+  capability, credential, or authorization decision is unavailable.
+
+Raven's autonomous pipeline is not part of Rook's MVP. Rook owns orchestration,
+state, policy, verification, publication, and reconciliation. Any Raven
+server capability gaps required by a provider contract are tracked and
+implemented in Raven, then consumed by Rook after contract validation.
+
+### 5.4.2 Common components and GaaP decision record
+
+Rook is proposed as a **Shared platform** (`Inferred`). Its intended
+consumers are application owners, maintainers, reviewers, and platform
+operators across the 25-100 repository portfolio. The product owner, service
+owner, support objective, capacity commitment, and consumer onboarding path
+remain `Unknown` until confirmed. Provider adapters are internal Rook modules;
+they do not change Rook's single platform-role classification.
+
+Rook owns orchestration state and evidence; it is not the canonical register
+for application inventory, source control, pipeline state, identity, secrets,
+or telemetry. JARVIS, SCM providers, CI/CD providers, the approved identity
+provider, and platform services retain their respective authority. A
+one-to-many change to a Rook contract requires compatibility analysis,
+consumer notification, capacity review, support ownership, and a rollback
+path.
+
+Before building a Rook capability, record:
+
+1. the capability without naming a product;
+2. the B.C. common-component catalogue, DevHub, and existing ministry
+   capabilities searched, with review date and search boundary;
+3. candidate owner, eligibility, support, privacy/security, accessibility,
+   availability, cost, roadmap, contract, and exit path;
+4. the decision to reuse, adapt behind a Rook-owned adapter, or build, with
+   confidence `Verified`, `Inferred`, `Unknown`, or `N/A`;
+5. the data custodian, purpose, subject/tenant scope, sharing class (`open`,
+   `shared`, or `closed`), retention, and minimum fields;
+6. the contract owner, compatibility/versioning policy, migration sequence,
+   rollback path, and dependency degradation behavior.
+
+Initial candidates to evaluate are corporate identity and step-up assurance,
+secrets and workload identity, OpenShift ingress and job execution, managed
+PostgreSQL/backup, object storage, queues/outbox, OpenTelemetry, centralized
+logging/alerting, image registry/signing/SBOM, notification, accessibility
+components, and approved repository/pipeline integrations. A candidate is
+not selected merely because it is common; it must satisfy the workload's
+security, data, availability, support, and exit requirements.
 
 ### 5.5 SCM and CI/CD integrations
 
@@ -302,9 +438,9 @@ Define an `ISourceControlProvider` contract for:
 
 Implement providers in this order:
 
-1. **On-premises Azure DevOps Server** for the pilot;
-2. **GitHub**;
-3. **Bitbucket**.
+1. **GitHub** for the MVP;
+2. **On-premises Azure DevOps Server** immediately after the MVP is running;
+3. **Bitbucket** later.
 
 Define a separate `IPipelineProvider` contract for read-only observation:
 
@@ -317,9 +453,9 @@ Define a separate `IPipelineProvider` contract for read-only observation:
 
 Implement pipeline providers in this order:
 
-1. **Azure DevOps Pipelines** for the pilot;
-2. **GitHub Actions**;
-3. **Jenkins** for the subset of applications that use it.
+1. **GitHub Actions** for the MVP;
+2. **Azure DevOps Pipelines** immediately after the MVP is running;
+3. **Jenkins** later for the subset of applications that use it.
 
 An application can have zero, one, or multiple configured pipeline bindings.
 For example, source can be in Bitbucket while a Jenkins job builds it, or source
@@ -328,22 +464,12 @@ records its role, such as validation, build, security scan, or deployment. The
 MVP observes existing runs and never triggers, stops, promotes, or reconfigures
 a pipeline.
 
-Use Raven as an MCP integration layer, not as Rook's workflow engine.
-Credential-bearing Raven servers execute in a trusted integration worker that
-has no target working tree and never executes repository code. Configure a
-provider-specific read-only tool allowlist:
-
-- Raven ADO tools for Azure DevOps repository, pull-request, and pipeline state;
-- Raven/GitHub tools or GitHub APIs for repository, pull-request, and Actions
-  state;
-- Raven Bitbucket tools for repository and pull-request state;
-- Raven Jenkins tools only for configured Jenkins pipeline bindings.
-
-The pilot must verify Raven's current ADO coverage against the
-`IPipelineProvider` contract. If it exposes pipeline definitions but not build/
-run state, test summaries, changes, and logs, extend the Raven ADO MCP before
-calling the ADO pipeline integration complete. Rook must not scrape the ADO web
-UI or fill missing fields with success-shaped defaults.
+Raven is one implementation of the provider adapters described above. Its
+selected servers run in the trusted integration worker and are subject to the
+same read-only allowlist, contract tests, freshness rules, and explicit
+unavailable/stale states. Raven-specific packaging, tool inventory, and
+capability extensions remain in Raven; Rook does not invoke Raven's autonomous
+pipeline or scrape provider UIs.
 
 Runner-local MCP servers are limited to credential-free analysis such as code
 indexing; they must not hold SCM, CI/CD, Rook database, or control-plane
@@ -667,8 +793,6 @@ or an explicit human decision.
   hashes, PR references, scores, and audit events.
 - **Retained evidence:** redacted logs, test/scan reports, diffs, and traces
   under a documented retention schedule.
-- **Long-term memory:** not in the MVP. Add only for a defined use case with
-  provenance, deletion, privacy, poisoning controls, and human correction.
 
 ## 8. Prioritization
 
@@ -786,16 +910,35 @@ unredacted model/tool context.
 - Prefer short-lived provider tokens for repository operations where supported.
   Never reuse the Copilot identity as the repository write credential merely
   for convenience.
-- Implement the MVP publisher for on-premises Azure DevOps Server first.
-  Because its PAT model may not provide GitHub App-style short-lived,
-  per-repository credentials, require least available scope, separate read and
-  publication identities, secret-manager storage, rotation, expiry monitoring,
-  revocation drills, and repository/project authorization as compensating
-  controls. Apply equivalent provider-specific controls when GitHub and
-  Bitbucket are added.
+- Provider adapters own provider-specific token types, scopes, rotation
+  mechanics, and revocation procedures. Rook requires separate read and
+  publication identities, least available scope, expiry visibility, and
+  repository/project authorization for every adapter.
 - Store secret references in Rook and values in the platform secret manager.
   Never place secrets in prompts, run envelopes, logs, evidence, or database
   JSON.
+
+### 10.1.1 Zero Trust decision record
+
+Rook treats operators, runners, repositories, Crow agents, model output, Raven
+responses, provider APIs, and platform workloads as distinct subjects or
+untrusted resources. For each representative high-impact path, document the
+following record before enabling it:
+
+| Protected operation | Subject and workload evidence | Resource/action | Required assurance; exception owner/expiry | Enforcement, scope, and duration | Degradation, revocation, and telemetry | Evidence status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Operator starts, cancels, holds, or overrides a run | OIDC subject, role, repository authorization, device/session evidence | Run, repository, evidence, or policy mutation | Step-up where required; named approver for exceptions and expiry | Rook API/resource authorization; one operation and short-lived session scope | Deny or hold on unknown policy; audit actor, reason, correlation ID, and evidence | `Verified` after an authorization test; otherwise `Unknown` |
+| Control plane creates a runner/verifier Job | Rook workload identity, validated template, approved namespace and policy version | One run attempt and its bounded resources | Signed envelope assurance; exception owned by platform operator and time-bound | Namespace-scoped service account, fixed template, nonce, audience, expiry | Reject replay or template drift; emit creation/termination decision and cleanup result | `Verified` by template and replay tests |
+| Runner reports progress or evidence | Audience-restricted run identity and envelope hash | Only its own run's progress and bounded evidence | Run-scoped workload assurance; no standing exception | Control-plane API validates subject, run, contract version, size, and hash | Reject stale/expired/mismatched reports; retain provenance without secrets | `Verified` by contract and scope tests |
+| Integration worker reads or publishes provider state | Provider-specific workload credential, repository binding, operation policy | Minimum repository/PR/pipeline resource and read/write action | Stronger publication assurance; exception owner is the operator and has an expiry | Provider API plus Rook allowlist; publication requires a fresh target revision and human-approved policy | Queue or block on provider outage; revoke/rotate credentials and record provider, scope, freshness, and result | `Inferred` until provider drills pass |
+| Agent invokes a tool or external decision | Run-scoped agent identity, approved Crow/Raven manifest, tool policy | Exact tool, arguments, target path/resource, and call budget | Run policy assurance; any override is named, justified, and expires | Deny-default hook plus server-side argument/resource validation | Hard-fail unknown/ambiguous authorization; record decision reason and redacted provenance | `Verified` by adversarial approval tests |
+| Raven server accesses an upstream system | Integration-worker identity and configured endpoint | Selected server capability and minimum provider query | Provider credential assurance; exception owner/expiry recorded in policy | Raven schema/tool boundary plus Rook per-run allowlist; no arbitrary URLs | Fail closed or mark stale/unavailable; rotate/revoke credentials and retain source timestamp | `Unknown` until each provider path is tested |
+
+Network location, VPN presence, repository ownership, branch state, prior
+authentication, or a model instruction is context only; none is proof of
+authorization. All exceptions are owned, justified, compensating, monitored,
+and time-bound. Runtime events use stable reason codes and correlation IDs,
+not raw tokens, prompts, hidden reasoning, or unnecessary personal data.
 
 ### 10.2 Copilot permission policy
 
@@ -815,42 +958,30 @@ that destructive and out-of-scope tools remain denied.
 
 ### 10.3 Runner containment
 
-- One non-root pod per attempt using the approved immutable image.
-- Read-only root filesystem; writable ephemeral workspace only.
-- No host mounts, container socket, default service-account token, or broad
-  namespace permissions in the runner. Use only an audience-restricted,
-  short-lived projected identity that can call the runner API for its run.
-- Keep Copilot credentials in a per-run broker/sidecar with no workspace mount.
-  Disable Copilot's first-party shell/file/URL tools and expose Rook-controlled
-  workspace and verifier-dispatch tools. The broker authenticates the caller
-  against the run's projected identity and enforces the envelope's model,
-  expiry, and call/usage budget. The feasibility spike must prove this external
-  server/broker shape before it becomes the production design.
-- Execute repository-controlled restore/build/test/scan commands in a separate
-  credential-free verifier Job. It receives an immutable workspace artifact,
-  has no route to the control plane or credential broker, and writes result
-  metadata plus capped artifacts to a per-attempt output volume. After the Job
-  exits, a trusted collector mounts that volume, computes hashes, validates the
-  expected-result contract, and persists the evidence. The verifier holds no
-  signing key or reporting credential.
-- Seccomp, dropped Linux capabilities, restricted security context, CPU/memory/
-  process/disk/time limits, and pod deadline.
-- Egress allowlist by workflow: repository host, approved package registries,
-  run-scoped control-plane endpoint, Copilot broker, credential-free local MCP
-  endpoints, and telemetry collector. The verifier uses a stricter registry-
-  only policy.
-- The runner has no repository write, CI/CD provider, Raven integration,
-  database, or control-plane administrative credential.
-- Explicit child-process cancellation and cleanup.
-- Destroy workspace and pod after evidence extraction.
+The runner and verifier boundaries described in section 5.2 are mandatory
+security properties. OpenShift manifests and platform runbooks own the
+provider-specific pod, namespace, quota, security-context, network-policy,
+deadline, cleanup, and Job-controller settings.
 
-The control plane may create Jobs only from a fixed server-side template and
-validated parameters. Its service account is namespace-scoped and cannot
-create arbitrary privileged workloads. Runner and verifier Jobs set
-`restartPolicy: Never`, `backoffLimit: 0`, and `activeDeadlineSeconds`; Rook,
-not the Kubernetes Job controller, creates a new attempt after backoff. Signed
-envelopes include a single-use nonce, not-before/not-after times, audience,
-signing-key ID, and key-rotation policy, and the control plane rejects replay.
+Rook's acceptance criteria are:
+
+- each attempt gets a fresh immutable execution boundary and workspace;
+- repository-controlled commands run only in the separate credential-free
+  verifier Job, never in the control plane or agent runner;
+- neither the runner nor verifier may use host mounts, a container socket, or
+  an ambient/default service-account token; workload identity is short-lived,
+  audience-restricted, and explicitly projected;
+- the runner has no provider write, Raven, database, or administrative
+  credentials. Copilot access is brokered and scoped to the run;
+- the verifier has no route to the control plane, Copilot broker, model
+  credentials, repository/provider credentials, database, or integration
+  workers, and holds no signing or reporting credential;
+- the control plane creates runner and verifier Jobs only from a fixed,
+  server-owned template with validated parameters; repository content cannot
+  choose a privileged workload or namespace;
+- model-visible tools are deny-by-default and independently authorized;
+- cancellation, deadline, evidence extraction, cleanup, and replay rejection
+  are observable and tested.
 
 ### 10.4 Prompt injection and untrusted content
 
@@ -867,13 +998,18 @@ signing-key ID, and key-rotation policy, and the control plane rejects replay.
 
 ### 10.5 Supply chain
 
-- Pin the .NET SDK, NuGet lock files, Crow/Raven releases, container base image,
-  security scanners, and deterministic scripts.
-- Verify checksums/signatures and generate an SBOM for runner and control-plane
-  images.
+- Pin the .NET SDK, NuGet lock files, Crow APM package, Raven release bundle,
+  Raven catalog, container base image, security scanners, and deterministic
+  scripts.
+- Verify Crow archive integrity and Raven archive SHA-256, manifest, source
+  commit, SBOM digest, and artifact attestation before promotion. Generate and
+  retain SBOMs for runner, control-plane, and integration-worker images.
 - Scan images and dependencies before promotion.
-- Fail when a checker did not actually inspect expected inputs.
-- Record image digest and package/tool versions in each run.
+- Fail when a checker did not actually inspect expected inputs or when the
+  catalog/configuration/package digest does not match the approved manifest.
+- Record image digest, Crow ref/content digest, Raven suite/platform/source
+  commit/catalog/archive/SBOM digests, selected server list, and package/tool
+  versions in each run.
 
 ### 10.6 Data and telemetry
 
@@ -892,48 +1028,47 @@ signing-key ID, and key-rotation policy, and the control plane rejects replay.
 ### 11.1 Evaluation criteria
 
 Scores use 1 (poor) to 5 (strong). Weighting reflects unattended execution of
-untrusted repository code across 25-100 repositories.
+untrusted repository code across 25-100 repositories. These are provisional
+decision aids; platform owners must validate capacity, recovery, and network
+policy assumptions before production.
 
-| Criterion | Weight | OpenShift Gold + PostgreSQL VM | Windows VM + shared MSSQL |
+| Criterion | Weight | OpenShift Emerald + in-cluster PostgreSQL | OpenShift Emerald + external VM PostgreSQL |
 | --- | ---: | ---: | ---: |
-| Per-run isolation and least privilege | 25% | 5 | 2 |
-| Scale and concurrency | 15% | 5 | 2 |
-| Operational resilience and self-healing | 15% | 4 | 2 |
-| Deployment consistency and rollback | 10% | 5 | 3 |
-| Network and secret policy | 10% | 5 | 3 |
-| Fit for mixed application toolchains | 10% | 5 | 3 |
-| Initial implementation simplicity | 10% | 3 | 5 |
-| Alignment with JARVIS/Windows operations | 5% | 2 | 5 |
-| **Weighted score** | **100%** | **4.50** | **2.75** |
+| Per-run isolation and least privilege | 25% | 5 | 5 |
+| Network isolation and policy control | 20% | 5 | 4 |
+| Initial implementation simplicity | 20% | 5 | 2 |
+| Deployment consistency and rollback | 10% | 5 | 4 |
+| Operational resilience and recovery | 15% | 2 | 4 |
+| Scale and concurrency | 10% | 3 | 5 |
+| **Weighted score** | **100%** | **4.35** | **3.95** |
 
-This comparison scores the two requested hosting choices. Cost, procurement/
-onboarding lead time, Gold disaster-recovery obligations, and team operating
-capacity require platform-owner estimates and are explicit decision gates
-rather than invented scores. Alternatives not selected for this comparison
-include in-cluster PostgreSQL (outside the requested shared-database topology),
-OpenShift Silver (availability/DR requirements not yet established), and using
-CI agents as the runner substrate (useful later, but it would couple Rook's
-security and scheduling model to heterogeneous repository CI).
+The MVP choice prioritizes Emerald's SDN-backed isolation and implementation
+simplicity. The external database becomes the target once measured workload,
+recovery objectives, and operational ownership justify the migration. Cost,
+platform onboarding, backup service, and RPO/RTO remain decision gates rather
+than invented assumptions.
 
-### 11.2 Option A: OpenShift Gold with shared PostgreSQL on a VM
+### 11.2 Option A: OpenShift Emerald with in-cluster PostgreSQL
 
 **Strengths**
 
 - A fresh pod is a natural OS-level isolation boundary for each run.
-- Resource quotas, deadlines, security contexts, network policies, and
-  namespace-scoped identities are platform capabilities.
+- Emerald SDN integration supports explicit deny-by-default network policy
+  between the control plane, runners, verifiers, database, and integrations.
+- Resource quotas, deadlines, security contexts, and namespace-scoped
+  identities are platform capabilities.
 - Runner concurrency can grow independently of the control plane.
 - Immutable images and deployment manifests improve reproducibility and
   rollback.
 - Linux containers fit the widest range of modern repository build tooling.
-- PostgreSQL provides a strong new-application state store and effective
-  database queue/lease primitives.
+- A single PostgreSQL instance provides the MVP state store and queue/lease
+  primitives without adding an external network dependency.
 
 **Risks and mitigations**
 
-- A database VM remains an external operational dependency: require TLS,
-  restricted network access, backups, PITR, restore tests, monitoring, and
-  separately managed credentials.
+- A single database instance is a deliberate availability and recovery
+  limitation: document backup/restore, retention, recovery tests, and
+  acceptable data-loss limits before onboarding.
 - Creating Jobs requires Kubernetes API authority: use a namespace-scoped
   control-plane service account and a fixed validated Job template.
 - Copilot user authentication in ephemeral containers is unproven: complete the
@@ -946,59 +1081,52 @@ security and scheduling model to heterogeneous repository CI).
 
 **Database choice**
 
-Use PostgreSQL for Rook. MSSQL remains technically possible, but supporting
-both providers in the MVP would double migration, locking, query, and test
-paths without user value. Exchange data with JARVIS through its API/MCP
-contract, not cross-database joins.
+Use PostgreSQL for Rook. Do not support MSSQL in the MVP; supporting both
+providers would double migration, locking, query, and test paths without user
+value. Exchange data with JARVIS through its API/MCP contract, not
+cross-database joins.
 
-### 11.3 Option B: Windows VM with shared MSSQL, similar to JARVIS
+### 11.3 Option B: OpenShift Emerald with external VM-hosted PostgreSQL
 
-The ADO JARVIS review found a .NET 10 ASP.NET Core API, separate Blazor
-WebAssembly UI, EF Core SQL Server persistence, Keycloak authentication,
-Serilog EventLog/file output, Azure DevOps build/test/Sonar/SBOM steps, and
-self-contained Windows/IIS-oriented artifacts. Its documentation identifies
-Windows Server 2025 and SQL Server 2019 as the intended deployment shape.
-However, the repository does not define production deployment automation,
-backups, failover, alert routing, or RTO/RPO. JARVIS is an inventory web
-application, not an untrusted-code execution platform.
+This is the target topology after MVP proof, not an MVP prerequisite.
 
 **Strengths**
 
-- Familiar .NET, IIS/Windows Service, MSSQL, DPAPI, and operational tooling.
-- Fastest path for a single-user Copilot/Raven feasibility prototype.
-- Similar build and deployment skills to JARVIS.
-- Straightforward access to Windows-only repositories and build tools.
+- Separates stateful database operations from the cluster's initial
+  single-instance failure domain.
+- Provides a clearer path to managed backup, PITR, monitoring, capacity, and
+  recovery objectives.
+- Preserves Emerald for runner isolation and network enforcement.
 
-**Risks**
+**Migration requirements**
 
-- Process/workspace ACLs and a configured working directory are not sufficient
-  containment for model-directed shell execution.
-- Strong isolation would require Windows containers, Hyper-V isolation, or
-  separate VMs, which removes much of the simplicity advantage.
-- One VM is a shared failure and resource-contention domain.
-- Parallel mixed-toolchain runs require careful process, port, filesystem,
-  credential, and cleanup management.
-- Scaling and patching are more manual.
-- Long-lived developer Copilot and Raven credentials are more likely to become
-  machine-wide ambient authority.
-
-**Appropriate use**
-
-Use this option for the phase 0 prototype only if OpenShift access would delay
-the authentication and Agent Framework spikes. Do not treat a successful
-in-process Windows prototype as evidence that the production containment model
-is adequate.
+- Define the external PostgreSQL owner, TLS/authentication, backup/PITR,
+  monitoring, RPO/RTO, retention, and restore-test obligations.
+- Rehearse an expand/migrate/contract migration with consistency checks,
+  quiescence or dual-write strategy as appropriate, rollback, and a bounded
+  maintenance window.
+- Switch only after MVP evidence demonstrates that the operational benefits
+  outweigh the added network dependency and migration complexity.
 
 ### 11.4 Decision
 
-**Preferred: OpenShift Gold with PostgreSQL on a VM.**
+**Preferred MVP: OpenShift Emerald with a single PostgreSQL instance inside
+the cluster.**
 
-The deciding factor is the workload, not the language. Rook intentionally
-executes repository-controlled build and test code under model direction.
-OpenShift provides the clearest enforceable security boundary and operational
-path for 25-100 continuously maintained repositories. The recommendation is
-conditional on validating Copilot authentication from ephemeral runners and
-operational acceptance of the PostgreSQL VM.
+Emerald's SDN integration and stronger network isolation are required because
+Rook intentionally executes repository-controlled build and test code under
+model direction. OpenShift Gold's default-allow network-policy posture is not
+compatible with the MVP security baseline. The in-cluster database keeps the
+first implementation and operations simple while the MVP proves the
+orchestration model.
+
+The MVP database is a deliberate single-instance availability trade-off, not
+the target production topology. It requires documented backup/restore,
+migration, retention, and data-loss limits. Once the MVP has demonstrated
+functional correctness, security controls, operational recovery, and measured
+load, migrate to an external VM-hosted PostgreSQL service. The migration is an
+expand/migrate/contract change with rehearsal, rollback, and an explicit
+owner; it is not a prerequisite for the first pilot.
 
 The MVP onboarding gate requires Linux-compatible build and verification.
 Windows-only/.NET Framework repositories are deferred to a separately isolated
@@ -1031,7 +1159,7 @@ The initial quota worksheet must model status-only runs separately because
 SCM and CI/CD status refreshes do not require Copilot. Phase 0 measures wall
 time, model calls, premium requests/tokens where available, verifier resources,
 artifact volume, and retry rate on representative repositories. Phase 1
-requests quota for the ADO pilot plus a defined burst/retry margin and accounts
+requests quota for the GitHub/GitHub Actions pilot plus a defined burst/retry margin and accounts
 for whether the runner remains resident while verifier Jobs execute.
 Repository, owner, and fleet publication budgets derive from measured reviewer
 throughput and target review lifetime. An individual developer entitlement is
@@ -1099,7 +1227,8 @@ production SLA.
 Build disposable prototypes; do not onboard production repositories.
 
 1. **Copilot authentication and licensing**
-   - Authenticate the .NET SDK in Windows and an ephemeral OpenShift pod.
+   - Authenticate the .NET SDK in an Emerald pod and, if useful for local
+     development, a separate non-production environment.
    - Test signed-in user, approved token environment flow, revocation,
      expiration, rate/usage exhaustion, and concurrent sessions.
    - Confirm licensing, unattended use, data handling, and operator
@@ -1114,12 +1243,18 @@ Build disposable prototypes; do not onboard production repositories.
    - Prove repository-controlled code cannot reach, impersonate a runner to, or
      exhaust the Copilot broker.
 3. **Crow and Raven**
-   - Run one Crow assessment in an isolated runner.
-   - Read an ADO-hosted pilot repository and its Azure DevOps Pipeline state
-     through the trusted integration worker.
-   - Identify and implement any missing Raven ADO operations required for
-     build/run details, test summaries, changes, and bounded log retrieval.
-   - Confirm package pinning, MCP authentication, redaction, and cancellation.
+   - Verify the approved immutable Crow package is consumable by the selected
+     Agent Framework/Copilot SDK path and that the selected workflow manifest
+     resolves reproducibly.
+   - Verify the approved Raven bundle provenance, selected-server
+     configuration, noninteractive credentials, and rollback path.
+   - Read a GitHub-hosted pilot repository and GitHub Actions observations
+     through the trusted integration worker; treat any missing run-state,
+     test-summary, change, or bounded-log capability as blocked until the
+     provider adapter is contract-tested.
+   - Confirm Rook's provider contract, tool allowlist, redaction, freshness,
+     cancellation, and explicit unavailable-state behavior. Raven owns any
+     server or tool implementation needed to satisfy that contract.
 4. **Agent Framework**
    - Implement a typed assess-plan-verify workflow with deterministic replay
      from durable typed step outputs.
@@ -1139,18 +1274,25 @@ per-run cost, and entitlement class for pilot and scaled operation.
   migrations.
 - Implement durable run state, outbox, leases, cancellation, and reconciliation.
 - Build the fixed OpenShift runner Job template and signed run envelope.
-- Implement on-premises Azure DevOps Server first for repository access, branch
-  publication, draft pull requests, and Azure DevOps Pipeline observations.
-- Complete the Raven ADO MCP additions identified in phase 0 and contract-test
-  them against an approved non-production ADO project.
-- Add manual ADO pipeline-status refresh and one manual assessment workflow.
+- Persist the approved Crow/Raven package provenance, selected workflow and
+  server configuration, and rollback target.
+- Implement GitHub first for repository access, branch publication, draft pull
+  requests, and GitHub Actions observations.
+- Contract-test the GitHub-backed adapter against an approved non-production
+  repository; the selected integration component owns its provider-specific
+  implementation changes.
+- Evaluate common components before custom implementations for identity,
+  secrets, ingress/jobs, PostgreSQL/backup, evidence storage, telemetry,
+  notifications, and registry/signing; record owner, contract, degradation,
+  and exit path for each selected dependency.
+- Add manual GitHub Actions status refresh and one manual assessment workflow.
 - Add operator UI for repository state, runs, evidence, holds, and overrides.
-- Inventory portfolio toolchains and keep Windows-only repositories out of the
+- Inventory portfolio toolchains and keep unsupported repositories out of the
   Linux-runner eligibility set.
 
-**Exit gate:** operators can run a read-only assessment against an ADO-hosted
-pilot repository, see normalized Azure DevOps Pipeline state and reproducible
-evidence, and create no repository mutation.
+**Exit gate:** operators can run a read-only assessment against a
+GitHub-hosted pilot repository, see normalized GitHub Actions state after the
+provider contract tests pass, and create no repository mutation.
 
 ### Phase 2 - Draft PR maintenance
 
@@ -1158,11 +1300,11 @@ evidence, and create no repository mutation.
 - Add isolated implementation, deterministic verification, independent review,
   branch push, and draft PR creation.
 - Add Rook bot labelling and PR templates.
-- Add ADO webhooks and PR reconciliation.
+- Add GitHub webhooks and PR reconciliation.
 - Add repository profile auto-discovery for build/test/scan candidates,
   followed by mandatory operator confirmation and an onboarding-effort metric.
-- Pilot with 3-5 low-risk ADO-hosted repositories representing different
-  stacks and Azure DevOps Pipeline shapes.
+- Pilot with 3-5 low-risk GitHub-hosted repositories representing different
+  stacks and GitHub Actions workflow shapes.
 
 **Exit gate:** at least 20 pilot proposals with no policy escape, duplicate PR,
 secret exposure, or unexplained verification result, plus an agreed minimum
@@ -1173,8 +1315,8 @@ human acceptance rate and measured onboarding hours per repository.
 - Implement versioned scoring, manual overrides/holds, fairness, windows, and
   quotas.
 - Schedule daily status refresh and eligible maintenance.
-- Add GitHub and Bitbucket SCM/PR adapters.
-- Add GitHub Actions and optional Jenkins pipeline observers.
+- Add on-premises Azure DevOps Server and Bitbucket SCM/PR adapters.
+- Add Azure DevOps Pipelines and optional Jenkins pipeline observers.
 - Add approved Crow security remediation classes and provider-appropriate
   security observations.
 - Expand to 25 repositories with dashboards, alerts, backup/restore tests, and
@@ -1193,19 +1335,19 @@ unresolved critical controls block scaling.
 - Route workflows by data classification, capability, cost, and model quality.
 - Introduce evaluation suites and canary repositories for Crow, model, prompt,
   and workflow upgrades.
-- Consider long-term memory only after a governed use case is approved.
 
 ## 14. Testing strategy
 
 - **Unit:** state transitions, invariants, scoring, eligibility, permission
   decisions, redaction, idempotency, and retry classification.
 - **Architecture:** dependency direction and forbidden project references.
-- **Integration:** PostgreSQL concurrency/leases/outbox/migrations; GitHub/ADO,
-  Bitbucket, Azure DevOps Pipelines, GitHub Actions, Jenkins/Raven, secret
+- **Integration:** PostgreSQL concurrency/leases/outbox/migrations; GitHub/GitHub
+  Actions first, followed by ADO,
+  Bitbucket, Azure DevOps Pipelines, Jenkins/Raven, secret
   manager, and OpenShift adapters using test doubles or approved test systems.
 - **Provider combinations:** contract cases where SCM and CI/CD differ,
-  including Bitbucket/Jenkins and GitHub/Azure DevOps Pipelines, plus an
-  ADO-hosted repository with no pipeline binding.
+  including GitHub/GitHub Actions for the MVP, followed by GitHub/Azure DevOps
+  Pipelines and Bitbucket/Jenkins, plus a repository with no pipeline binding.
 - **Contract:** typed Agent Framework outputs, MCP schemas, run envelope,
   provider webhooks, and PR payloads.
 - **Sandbox/adversarial:** path escape, symlink, process fork, resource
@@ -1238,93 +1380,35 @@ unresolved critical controls block scaling.
 | CI/CD provider is absent, stale, unavailable, or inaccessible | False health report | independent pipeline bindings, source timestamps, freshness, and explicit `NotConfigured`/`Unavailable`/`Unknown`/`Stale` |
 | SCM and CI/CD provider are incorrectly assumed to match | Missed builds or wrong authorization | separate provider contracts, credentials, bindings, and contract tests |
 | Crow/model upgrade changes behavior | Fleet regression | pinned versions, evaluation suite, canary rollout, rollback |
-| Database VM failure | Orchestration outage/state loss | HA decision, PITR backups, restore tests, RPO/RTO |
+| Single in-cluster database failure | MVP orchestration outage/state loss | Explicit availability trade-off, backups, restore tests, retention, and a tested migration trigger to external PostgreSQL |
 | OpenShift control plane can create arbitrary Jobs | Namespace compromise | fixed template, validated parameters, scoped service account |
 | Agent Framework/Durable packages evolve | Rework or lock-in | package pinning, adapter boundary, Rook-owned state machine |
 
-## 16. NVIDIA Object Oriented Agents review
-
-### Incorporate now
-
-- Deterministic orchestration around narrow model judgments.
-- Typed step contracts and one model task per step.
-- External evidence checks before accepting model claims.
-- OS-level containment rather than relying on language/tool checks.
-- The smallest useful model-visible tool surface.
-- Per-job agent, context, and stateful tool instances.
-- Explicit separation of ephemeral context, durable state, and optional
-  long-term memory.
-- Full call-tree tracing, not only model transcripts.
-- Bounded turns, retries, execution time, output, and resources.
-- Clear bot authorship on automated artifacts.
-
-### Adapt later
-
-- Reactive channels/dispatch as a design reference for event-driven work; use
-  .NET/OpenShift/database primitives rather than porting Python APIs.
-- Evaluation pipelines that execute, score, and append durable results; build
-  Rook-specific evaluation cases and scorers.
-- Middleware/observer/instrumentation separation; map it to Agent Framework,
-  Copilot hooks, ASP.NET Core middleware, and OpenTelemetry.
-- Guardrail pipelines around model, tool, and agent calls; adopt only where
-  they add enforceable policy beyond Rook's deterministic permission layer.
-
-### Explicitly avoid
-
-- Agents that write and hot-reload their own persistent libraries or skills.
-- Automatically importing/executing agent code found in a target repository.
-- Treating `cwd`, an MCP parameter, hidden field, prompt rule, or static code
-  validator as an authorization boundary.
-- Assuming credentials or OAuth context automatically flow between host,
-  Copilot session, agent, and MCP server.
-- Raising model iteration limits instead of decomposing an unreliable task.
-
-## 17. Decisions to confirm during implementation
+## 16. Decisions to confirm during implementation
 
 These do not change the recommended architecture, but must be resolved before
 production:
 
 - approved identity provider/client and Rook role owners;
-- ADO Server pilot collection/project, PAT scopes, rotation, project
-  authorization, and bot identity;
-- GitHub and Bitbucket repository credential mechanisms and bot identities;
+- GitHub organization/repository credential mechanisms, app/bot identity, and
+  GitHub Actions permissions;
+- ADO Server collection/project, PAT scopes, rotation, project authorization,
+  and bot identity for the follow-on integration;
 - Copilot unattended-use approval, entitlement/budget owner, and per-operator
   credential lifecycle;
-- PostgreSQL service owner, HA topology, RPO/RTO, retention, and restore owner;
+- MVP PostgreSQL owner, backup/restore owner, retention, and acceptable
+  single-instance data-loss window;
+- external VM-hosted PostgreSQL owner, HA topology, RPO/RTO, and migration
+  trigger after MVP proof;
 - OpenShift namespaces, quotas, egress destinations, and image promotion path;
 - evidence object store, telemetry backend, and evidence retention/classification;
-- representative ADO-hosted pilot repositories and Azure DevOps Pipelines;
-- Raven ADO MCP ownership and required pipeline-run/test/log additions;
-- sequencing and test environments for GitHub, Bitbucket, GitHub Actions, and
-  Jenkins adapters;
+- representative GitHub-hosted pilot repositories and GitHub Actions workflows;
+- sequencing and test environments for ADO, Bitbucket, Azure DevOps Pipelines,
+  and Jenkins adapters;
 - target portfolio toolchain inventory and Windows-runner demand;
 - production priority formula thresholds and manual override approvers.
 
-## 18. Rubber-duck review outcome
-
-An independent rubber-duck review challenged the initial plan before
-completion. Material findings were incorporated by:
-
-- making the control plane the sole database writer and defining the
-  runner-reporting/evidence path;
-- isolating Copilot credentials behind a run-scoped broker and moving all
-  repository-controlled execution into a credential-free verifier;
-- separating active-run deduplication from draft-PR publication identity and
-  preventing one finding from appearing in multiple open proposals;
-- separating the bounded run lifecycle from the long-lived change-proposal
-  lifecycle;
-- splitting visible risk from automation eligibility and defining functional,
-  infrastructure, and publication retry budgets;
-- moving credential-bearing SCM and CI/CD operations, including optional
-  Jenkins, into the trusted integration boundary;
-- adding reviewer backpressure, `PauseAll`, measured capacity/entitlement
-  gates, and correct hosting score calculations.
-
-The remaining items in section 17 are implementation decisions that require
-platform, security, identity, and product owners; they are not hidden
-assumptions.
-
-## 19. Sources reviewed
+## 17. Sources reviewed
 
 ### Microsoft and GitHub
 
@@ -1336,10 +1420,25 @@ assumptions.
 ### Crow and Raven
 
 - [Crow](https://github.com/bcgov/crow)
+- [Crow README: agents, skills, APM/plugin packaging, and release process](https://github.com/bcgov/crow/blob/main/README.md)
+- [Crow package manifest](https://github.com/bcgov/crow/blob/main/apm.yml)
+- [Crow application-architecture principles](https://github.com/bcgov/crow/tree/main/.apm/skills/crow-application-architecture)
+- [Crow platform alignment](https://github.com/bcgov/crow/blob/main/.apm/skills/crow-application-architecture/modules/platform-alignment.md)
+- [Crow Zero Trust guidance](https://github.com/bcgov/crow/blob/main/.apm/skills/crow-application-architecture/modules/zero-trust.md)
+- [Crow solution-architecture common-component guidance](https://github.com/bcgov/crow/blob/main/.apm/skills/crow-solution-architecture/modules/bc-common-components.md)
+- [Crow security-review modules](https://github.com/bcgov/crow/tree/main/.apm/skills/crow-security-review/modules)
+- [Crow project context skill](https://github.com/bcgov/crow/blob/main/.apm/skills/crow-project-context/SKILL.md)
+- [Crow Raven delivery and update guidance](https://github.com/bcgov/crow/tree/main/.apm/skills/crow-raven-setup)
 - [Raven](https://github.com/bcgov/raven)
+- [Raven packaging and releases](https://github.com/bcgov/raven/blob/main/docs/RELEASES.md)
+- [Raven tool inventory](https://github.com/bcgov/raven/blob/main/docs/TOOL_INVENTORY.md)
+- [Raven system design and architecture](https://github.com/bcgov/raven/blob/main/docs/SYSTEM_DESIGN_AND_ARCHITECTURE.md)
+- [Raven release server catalog](https://github.com/bcgov/raven/blob/main/release/server-catalog.json)
 - [Raven autonomous DevOps pipeline](https://github.com/bcgov/raven/blob/main/packages/pipeline/AUTONOMOUS_DEVOPS_PIPELINE.md)
 - [Raven Azure DevOps MCP](https://github.com/bcgov/raven/tree/main/packages/ado-mcp)
 - [Raven Jenkins MCP](https://github.com/bcgov/raven/blob/main/packages/jenkins-mcp/README.md)
+- [B.C. government common components catalogue](https://digital.gov.bc.ca/technology/common-components/)
+- [B.C. common components background and Government as a Platform](https://bcgov.github.io/common-components-wiki/background)
 
 ### NVIDIA Object Oriented Agents
 
@@ -1364,6 +1463,3 @@ Reviewed the `dev` branch of the ECON/JARVIS/JARVIS repository, including:
 - `azure-pipelines.yml`;
 - `src/Jarvis.Api/Jarvis.Api.csproj`;
 - `src/Jarvis.Api/Program.cs`.
-
-The repository is available internally at
-`https://tfs.econ.gov.bc.ca/ECON/JARVIS/_git/JARVIS`.

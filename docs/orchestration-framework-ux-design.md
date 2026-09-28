@@ -64,7 +64,7 @@ order match the visual order. The shell works without client-side JavaScript.
 | Capability | Viewer | Operator | Maintainer | Administrator |
 | --- | --- | --- | --- | --- |
 | View authorized portfolio, repository, run, and evidence metadata | Yes | Yes | Yes | Yes |
-| Download authorized evidence | Yes | Yes | Yes | Yes |
+| Download authorized evidence permitted by evidence classification and subject authorization | Internal only | Internal and Confidential by repository policy | Internal/Confidential; Restricted with approval and step-up | Any class; Restricted with approval and step-up |
 | Refresh provider status; start/cancel assessment | No | Yes | Yes | Yes |
 | Create/release repository hold; set expiring priority override | No | Yes | Yes | Yes |
 | Onboard repository | No | No | Yes | Yes |
@@ -199,8 +199,8 @@ Configuration
 Workflow / policy / model / Crow / Raven / credential-profile references
 
 Evidence
-| Kind | Source | Created | Size | Integrity | Action |
-| ...  | ...    | ...     | ...  | Verified  | Download |
+| Kind | Source | Classification | Created | Size | Integrity | Action |
+| ...  | ...    | Internal       | ...     | ...  | Verified  | Download |
 
 Audit history
 Timestamp | Actor/workload | Action | Outcome/reason
@@ -218,6 +218,10 @@ Timestamp | Actor/workload | Action | Outcome/reason
   icon alone.
 - A mismatch blocks download, identifies the integrity failure, and offers
   reassessment or support instead of presenting the evidence as usable.
+- Evidence classification is displayed with every item. A denied download
+  states whether the subject lacks the required class authorization, the item
+  is restricted, publication scanning is incomplete, or integrity validation
+  failed; the page never renders restricted evidence as active content.
 
 ## 9. Screen E - Holds, overrides, and fleet pause
 

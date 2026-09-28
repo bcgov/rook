@@ -98,6 +98,12 @@ most likely to block the pilot are:
 - evidence storage, classification, and retention;
 - PostgreSQL backup/restore ownership and accepted MVP RPO/RTO.
 
+Security decisions are not pilot assumptions. T127 must assign an owner and due
+date for each unresolved decision, record fail-closed behavior for unresolved
+identity, provider, egress, evidence, retention, and recovery decisions, and
+link each decision to measurable acceptance evidence before the Phase 1 gate
+can approve the pilot.
+
 ## Navigation
 
 - Start a technical review with the

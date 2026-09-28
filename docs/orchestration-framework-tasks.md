@@ -139,16 +139,16 @@ ambient token or prohibited route, the broker has no workspace, limits
 terminate abusive work, evidence is bounded, and Job cleanup is observable.
 
 - [ ] T039 [US5] Define fixed unprivileged runner, broker, and verifier Job templates with explicit service accounts in `deploy/spikes/containment-jobs.yaml`
-- [ ] T040 [US5] Define default-deny ingress/egress policies and only required namespace paths in `deploy/spikes/containment-network-policies.yaml`
+- [ ] T040 [US5] Define default-deny ingress/egress policies and only required namespace paths, including verifier deny-by-default egress and approved registry/proxy exceptions, in `deploy/spikes/containment-network-policies.yaml`
 - [ ] T041 [US5] Implement signed envelope validation for audience, expiry, nonce, template digest, and replay in `spikes/Rook.ContainmentProbe/EnvelopeValidator.cs`
 - [ ] T042 [US5] Implement bounded output collection and cleanup reporting in `spikes/Rook.ContainmentProbe/ResultCollector.cs`
 - [ ] T043 [P] [US5] Add filesystem, symlink, host mount, container socket, and workspace isolation tests in `spikes/Rook.SpikeTests/FilesystemContainmentTests.cs`
-- [ ] T044 [P] [US5] Add egress, DNS, broker impersonation/exhaustion, control-plane, provider, and database route tests in `spikes/Rook.SpikeTests/NetworkContainmentTests.cs`
+- [ ] T044 [P] [US5] Add egress, DNS, redirect, alternate-IP, IPv6, proxy-bypass, broker impersonation/exhaustion, control-plane, provider, and database route tests against the spike verifier policy created by T040 in `spikes/Rook.SpikeTests/NetworkContainmentTests.cs`; production-policy verification is required by T123
 - [ ] T045 [P] [US5] Add process fork, CPU, memory, disk, timeout, output-size, and cleanup tests in `spikes/Rook.SpikeTests/ResourceContainmentTests.cs`
 - [ ] T046 [P] [US5] Add secret, service-account token, environment, and projected-identity tests in `spikes/Rook.SpikeTests/CredentialContainmentTests.cs`
 - [ ] T047 [US5] Execute the adversarial suite in Emerald and record redacted results in `docs/spikes/containment-test-report.md`
 - [ ] T048 [US5] Consolidate every spike result, approval, cost projection, residual risk, owner, and release condition into `docs/spikes/phase-0-go-no-go.md`
-- [ ] T049 [US5] Add a CI gate that fails when any Phase 0 decision is missing, `Conditional go` lacks an owner/date/control, or T038 requires an unplanned durability architecture in `.github/workflows/phase-0-spikes.yml`
+- [ ] T049 [US5] Add a CI gate that fails when any Phase 0 decision is missing, `Conditional go` lacks an owner/date/control, T038 requires an unplanned durability architecture, or containment tests permit verifier access to an arbitrary external endpoint in `.github/workflows/phase-0-spikes.yml`
 
 ### 3.7 Phase 0 exit gate
 
@@ -210,8 +210,8 @@ Local fakes may be created without those approvals, but a pilot must not start.
 - [ ] T066 Implement lease claiming with expiry and monotonically increasing fencing tokens in `src/Rook.Infrastructure/Persistence/Leases/LeaseRepository.cs`
 - [ ] T067 Add PostgreSQL Testcontainers integration tests for migration, rollback compatibility, transactions, concurrency, uniqueness, outbox, leases, and Unicode round trips in `tests/Rook.IntegrationTests/Persistence/PostgreSqlPersistenceTests.cs`
 - [ ] T068 Add architecture tests for project references, forbidden SDK dependencies, and spike isolation in `tests/Rook.ArchitectureTests/ProjectBoundaryTests.cs`
-- [ ] T069 Configure validated options that fail startup outside Development for OIDC, PostgreSQL, evidence, GitHub, signing, limits, freshness, and the exact Phase 0-approved Crow/Raven versions, digests, catalog schema, selected servers, and rollback targets in `src/Rook.Web/Configuration/RookOptions.cs`
-- [ ] T070 Configure structured logging, traces, metrics, health endpoints, redaction, correlation IDs, and run IDs in `src/Rook.Infrastructure/Observability/TelemetryConfiguration.cs` and `src/Rook.Web/Program.cs`
+- [ ] T069 Configure validated options that fail startup outside Development for OIDC, PostgreSQL, evidence, data-boundary policy, GitHub, signing, limits, freshness, and the exact Phase 0-approved Crow/Raven versions, digests, catalog schema, selected servers, and rollback targets in `src/Rook.Web/Configuration/RookOptions.cs`
+- [ ] T070 Configure structured logging, traces, metrics, health endpoints, correlation IDs, run IDs, and a fail-closed pre-persistence sensitive-data guard for logs, traces, audit, reporting, and evidence payloads in `src/Rook.Infrastructure/Observability/TelemetryConfiguration.cs`, `src/Rook.Application/Security/SensitiveDataGuard.cs`, and `src/Rook.Web/Program.cs`
 
 ### 4.4 User Story 6 - sign in and use the accessible operator shell
 
@@ -244,7 +244,7 @@ stale or unavailable; no GitHub write API is reachable.
 - [ ] T078 [US7] Implement separate read-only SCM and CI/CD observation ports and normalized mappings in `src/Rook.Application/Providers/IRepositoryObservationReader.cs` and `src/Rook.Application/Providers/IPipelineObservationReader.cs`; application handlers must authorize the exact repository binding before either call
 - [ ] T079 [US7] Implement the GitHub repository and GitHub Actions read adapter with pagination, deadlines, cancellation, rate-limit metadata, redaction, and freshness in `src/Rook.Infrastructure/GitHub/GitHubObservationReader.cs`
 - [ ] T080 [P] [US7] Add fixture and approved-sandbox contract tests for mapping, no-pipeline, stale, unavailable, pagination, cancellation, and read-only surface in `tests/Rook.IntegrationTests/GitHub/GitHubObservationContractTests.cs`
-- [ ] T081 [US7] Implement repository discovery, review, confirmation, duplicate-binding prevention, and audit commands in `src/Rook.Application/Repositories/Onboarding/OnboardRepositoryCommandHandler.cs`
+- [ ] T081 [US7] Implement repository discovery, review, data-boundary policy selection and validation, confirmation, duplicate-binding prevention, and audit commands in `src/Rook.Application/Repositories/Onboarding/OnboardRepositoryCommandHandler.cs`; reject missing, stale, or incompatible classification/provider/residency policy
 - [ ] T082 [US7] Implement `GET /repositories/new`, review, and confirmation Razor Pages with antiforgery, error summary, persistent labels, and no-JavaScript operation in `src/Rook.Web/Pages/Repositories/Onboarding/New.cshtml` and `src/Rook.Web/Pages/Repositories/Onboarding/Review.cshtml`
 - [ ] T083 [US7] Implement repository detail queries and an idempotent manual read-only provider-refresh command with overview, freshness, eligibility reasons, policy/package versions, runs, holds, and audit in `src/Rook.Application/Repositories/Details/GetRepositoryDetailsQuery.cs` and `src/Rook.Application/Repositories/Refresh/RefreshRepositoryStatusCommandHandler.cs`
 - [ ] T084 [US7] Implement the repository detail Razor Page, responsive sections, and authorized POST-redirect-GET provider-refresh action in `src/Rook.Web/Pages/Repositories/Details.cshtml` and `src/Rook.Web/Pages/Repositories/Details.cshtml.cs`
@@ -276,12 +276,12 @@ typed evidence; holds, stale credentials, ineligible tools, package mismatch,
 duplicate submission, cancellation, timeout, and unavailable providers reach
 the specified non-success state and produce no repository write.
 
-- [ ] T090 [US9] Implement assessment preflight, active-run deduplication, policy/package/credential resolution, and idempotent start command in `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`; one or more findings produce terminal `AssessmentComplete`, zero actionable findings produce terminal `NoChange`, and both require versioned Observe/Assess outputs, evidence completion, and audit
+- [ ] T090 [US9] Implement assessment preflight, active-run deduplication, data-boundary/policy/package/credential resolution, and idempotent start command in `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`; reject missing, expired, or incompatible provider/data policies before any source-bearing operation; one or more findings produce terminal `AssessmentComplete`, zero actionable findings produce terminal `NoChange`, and both require versioned Observe/Assess outputs, evidence completion, and audit
 - [ ] T091 [US9] Implement the preflight review and POST-redirect-GET assessment Razor Pages in `src/Rook.Web/Pages/Repositories/Assessments/New.cshtml` and `src/Rook.Web/Pages/Repositories/Assessments/New.cshtml.cs`
 - [ ] T092 [US9] Implement signed run envelope creation and fixed-template parameter validation in `src/Rook.Infrastructure/OpenShift/RunEnvelopeFactory.cs` and `src/Rook.Infrastructure/OpenShift/RunnerJobFactory.cs`
-- [ ] T093 [P] [US9] Define the unprivileged fixed runner Job, service account, quotas, deadlines, and network policies in `deploy/base/runner/job.yaml`, `deploy/base/runner/service-account.yaml`, and `deploy/base/runner/network-policy.yaml`
+- [ ] T093 [P] [US9] Define the unprivileged fixed runner Job, service account, quotas, deadlines, and deny-by-default verifier egress policy with immutable approved registry/proxy allowlist in `deploy/base/runner/job.yaml`, `deploy/base/runner/service-account.yaml`, `deploy/base/runner/network-policy.yaml`, and `deploy/base/verifier/network-policy.yaml`
 - [ ] T094 [US9] Implement Phase 1 envelope validation, run budgets, typed progress submission, and terminal reporting with no repository command execution in `src/Rook.Runner/Program.cs`
-- [ ] T095 [US9] Implement the pinned Copilot `IAgentBackend` and separately composed Agent Framework/Crow read-only workflow in `src/Rook.AgentFramework/Copilot/CopilotAgentBackend.cs` and `src/Rook.AgentFramework/Workflows/ReadOnlyAssessmentWorkflow.cs`
+- [ ] T095 [US9] Implement the pinned Copilot `IAgentBackend` and separately composed Agent Framework/Crow read-only workflow in `src/Rook.AgentFramework/Copilot/CopilotAgentBackend.cs` and `src/Rook.AgentFramework/Workflows/ReadOnlyAssessmentWorkflow.cs`; perform a server-side data-boundary policy check before every source-, issue-, log-, or provider-observation-bearing request
 - [ ] T096 [US9] Implement leased outbox dispatch, Job launch, heartbeat timeout, cancellation forwarding, and reconciliation of missing/terminated Jobs after a configurable grace period in `src/Rook.Worker/Runs/RunWorker.cs`
 - [ ] T097 [P] [US9] Add unit tests for preflight, deduplication, `AssessmentComplete`, `NoChange`, package mismatch, hold, credential failure, timeout, and cancellation in `tests/Rook.UnitTests/Runs/StartAssessmentTests.cs`
 - [ ] T098 [P] [US9] Add contract tests proving the Phase 1 agent/provider surface cannot commit, push, comment, label, dispatch, or create a pull request in `tests/Rook.IntegrationTests/ReadOnlyAssessment/ReadOnlySurfaceTests.cs`
@@ -299,10 +299,10 @@ missing or mismatched evidence is never success-shaped; optional polling does
 not move focus or spam announcements.
 
 - [ ] T100 [US10] Implement scoped run detail, timeline, configuration, audit, and evidence queries in `src/Rook.Application/Runs/Details/GetRunDetailsQuery.cs`
-- [ ] T101 [US10] Implement evidence metadata persistence, SHA-256 verification, bounded upload, authorized streaming download, and retention hooks in `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`; deny mismatched downloads, flag the run evidence as failed, audit the integrity reason, and offer reassessment rather than treating the evidence as usable
+- [ ] T101 [US10] Implement evidence metadata persistence, pre-publication secret/PII scanning, SHA-256 verification, bounded upload, class-aware authorized streaming download, safe response headers, and retention hooks in `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`; deny mismatched or unscanned downloads, flag the run evidence as failed, audit the integrity/classification reason, and offer reassessment rather than treating the evidence as usable
 - [ ] T102 [US10] Implement the run detail Razor Page with distinct `AssessmentComplete`, `NoChange`, and failure content plus timeline, provenance, freshness, evidence integrity, audit history, and ordinary refresh in `src/Rook.Web/Pages/Runs/Details.cshtml` and `src/Rook.Web/Pages/Runs/Details.cshtml.cs`
 - [ ] T103 [P] [US10] Add progressive polling that pauses when hidden, respects user preferences, updates a polite atomic status region only when status or active step changes, and stops at terminal state in `src/Rook.Web/Scripts/run-status.js`
-- [ ] T104 [P] [US10] Add authorization, hash mismatch, missing payload, size limit, stale source, and retention tests in `tests/Rook.IntegrationTests/Evidence/EvidenceStoreTests.cs`
+- [ ] T104 [P] [US10] Add class-based Viewer/Operator/Maintainer/Administrator authorization, secret/PII scan failure, safe headers/media types, hash mismatch, missing payload, size limit, stale source, and retention tests in `tests/Rook.IntegrationTests/Evidence/EvidenceStoreTests.cs`
 - [ ] T105 [P] [US10] Add distinct `AssessmentComplete`/`NoChange`/failure content, focus stability, live-region, no-JavaScript, keyboard, reflow, and screen-reader smoke tests in `tests/Rook.EndToEndTests/Runs/RunDetailsAccessibilityTests.cs`
 
 ### 4.9 User Story 11 - manage holds, overrides, cancellation, and fleet pause
@@ -333,12 +333,23 @@ read-only status remains available.
 - [ ] T118 Inventory pilot portfolio operating systems, SDKs, package managers, build commands, pipeline shapes, Unicode needs, and Linux-runner eligibility in `docs/pilot/toolchain-inventory.md`
 - [ ] T119 Record common-component decisions for identity, secrets, ingress/Jobs, PostgreSQL/backup, evidence, telemetry, notifications, and registry/signing with owner, evidence date, degradation, and exit path in `docs/architecture/common-components.md`
 - [ ] T120 Execute lint, build, unit, integration, architecture, end-to-end, accessibility automation, and dependency/security scans and record tool versions plus manual accessibility checks in `docs/pilot/verification-report.md`
-- [ ] T121 Execute the authorized GitHub pilot, prove all provider write canaries unchanged, reconcile the final run, and record evidence in `docs/pilot/read-only-assessment-report.md`
-- [ ] T122 Add a `PilotGate` test category, execute its documented command, and record pilot owner acceptance, open decisions, residual risks, measured operations, repository-mutation proof, and Phase 1 go/no-go in `tests/Rook.EndToEndTests/PilotGateTests.cs` and `docs/pilot/phase-1-exit-decision.md`
+- [ ] T123 [SEC-001] Define and verify deny-by-default verifier egress, approved registry/proxy destinations, DNS restrictions, redirect handling, and repository-exfiltration tests in `deploy/base/verifier/network-policy.yaml`, `src/Rook.Contracts/VerifierEgressPolicy.cs`, and `tests/Rook.IntegrationTests/Containment/VerifierEgressTests.cs`
+- [ ] T124 [SEC-002] Define and enforce repository-to-model data-boundary policy, including classification, residency, permitted providers, prohibited content classes, and fail-closed preflight checks in `src/Rook.Contracts/DataBoundaryPolicy.cs`, `src/Rook.Domain/Repositories/RepositoryProfile.cs`, `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`, and `tests/Rook.IntegrationTests/DataBoundary/DataBoundaryPolicyTests.cs`
+- [ ] T125 [SEC-003] Implement evidence-class authorization, restricted-evidence handling, safe download headers, media-type allowlisting, and class-based authorization tests in `src/Rook.Application/Evidence/EvidenceAuthorization.cs`, `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`, and `tests/Rook.IntegrationTests/Evidence/EvidenceAuthorizationTests.cs`
+- [ ] T126 [SEC-004] Implement fail-closed pre-persistence sensitive-data detection and redaction for run-step reports, evidence, logs, traces, and audit payloads in `src/Rook.Application/Security/SensitiveDataGuard.cs`, `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`, and `tests/Rook.IntegrationTests/Security/SensitiveDataGuardTests.cs`
+- Security implementation tasks T123-T126 must be complete before the authorized
+  pilot T121 can execute.
+- [ ] T121 Execute the authorized GitHub pilot only after T123-T126 pass, prove all provider write canaries unchanged, reconcile the final run, and record evidence in `docs/pilot/read-only-assessment-report.md`
+- [ ] T127 [SEC-GATE] Resolve pilot security ownership and acceptance records for OIDC outage behavior, OpenShift egress, evidence classification/retention, backup/restore, and T123-T126 residual risks in `docs/pilot/security-decision-record.md` and `docs/pilot/phase-1-exit-decision.md`
+- Security evidence and decision task T127 must be complete before T122 is
+  executable.
+
+- [ ] T122 Add a `PilotGate` test category, execute its documented command, and record T123-T127 acceptance evidence, pilot owner acceptance, open decisions, residual risks, measured operations, repository-mutation proof, and Phase 1 go/no-go in `tests/Rook.EndToEndTests/PilotGateTests.cs` and `docs/pilot/phase-1-exit-decision.md`
 
 ### 4.11 Phase 1 exit gate
 
-T122 is approved; an authorized operator completes the end-to-end UX against
+T123-T127 are complete and their acceptance evidence is available. T122 is
+approved; an authorized operator completes the end-to-end UX against
 an approved GitHub-hosted pilot repository; normalized GitHub Actions state
 includes provenance and freshness; accessibility evidence is recorded;
 backup/restore is measured; and provider-side canaries prove that Rook created
@@ -383,6 +394,10 @@ flowchart LR
 - US10 waits for an executable run.
 - US11 repository controls may start after US7, but cancellation and
   fleet-pause integration wait for US9.
+- The Phase 1 pilot gate T122 depends on T123-T127. T123-T126 may proceed
+  after their related contracts and storage surfaces exist; T127 waits for
+  those implementation and test results, and T122 remains blocked until all
+  five security prerequisites are complete.
 - Parallel workers own different files. Shared project/configuration files are
   changed only by their earlier non-parallel setup task.
 
@@ -405,8 +420,9 @@ flowchart LR
    persists and audits a minimal aggregate, and renders an accessible shell.
 3. **Read-only data MVP:** T078-T089. An approved repository can be onboarded
    and monitored without agent execution.
-4. **Phase 1 pilot MVP:** T090-T122. One read-only assessment and all operator
-   controls, evidence, reliability, accessibility, and exit proof are complete.
+4. **Phase 1 pilot MVP:** T090-T127. One read-only assessment and all operator
+   controls, evidence, reliability, accessibility, security, and exit proof are
+   complete.
 
 ## 6. Later-phase roadmap
 

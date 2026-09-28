@@ -207,8 +207,11 @@ flowchart LR
   boundaries. A source repository may use a different CI/CD platform, and
   access to one never implies access to the other.
 - **Model boundary:** Prompts and source may leave the Rook environment through
-  the configured provider. Onboarding must record data classification and the
-  provider policy approved for that repository.
+  the configured provider. Onboarding must record and enforce the repository's
+  data-boundary policy before any source, prompt, issue, log, or provider
+  observation is submitted. The policy must specify classification, residency,
+  permitted model providers, prohibited content classes, redaction mode, and
+  expiry; missing, stale, or incompatible policy evaluation fails closed.
 - **Database boundary:** `Rook.Web` and the trusted `Rook.Worker` are the only
   application workloads that write the database. Both use the same
   application persistence boundary, but separate least-privileged database
@@ -718,7 +721,10 @@ or an explicit human decision.
 - optional JARVIS application ID;
 - owners, business criticality, data classification, and support tier;
 - enabled workflows, cadence, maintenance window, concurrency limit;
-- allowed agent backends/models and data-boundary policy;
+- allowed agent backends/models and a versioned data-boundary policy containing
+  permitted providers, residency requirements, prohibited content classes,
+  source/prompt redaction mode, effective/expiry timestamps, and fail-closed
+  behavior;
 - credential-profile references, never credential values;
 - build/test/scan commands and expected-result contracts;
 - branch/PR policy, maximum diff, forbidden paths, required reviewers, reviewer
@@ -786,8 +792,10 @@ or an explicit human decision.
 - trigger, requested actor, credential profile, repository/target commit;
 - workflow/policy/Crow/Raven/backend/model/image versions;
 - state transitions, leases, retries, budgets, usage, timing, and errors;
-- full versioned typed inputs/outputs persisted through the control-plane
-  reporting API, payload hashes, and evidence references for each step.
+- bounded, pre-redacted versioned typed summaries persisted through the
+  control-plane reporting API, payload hashes, and evidence references for each
+  step; raw untrusted inputs/outputs and secret-bearing payloads are never
+  persisted.
 
 **Attempt**
 
@@ -926,6 +934,13 @@ unredacted model/tool context.
 - Roles: `Viewer`, `Operator`, `Maintainer`, and `Administrator`.
 - Resource-level authorization for repository, credential profile, workflow,
   manual priority, evidence, and cancellation operations.
+- Evidence is classified as `Internal`, `Confidential`, or `Restricted`.
+  Viewers may download only `Internal` evidence; Operators may download
+  `Internal` and `Confidential` evidence when repository policy grants that
+  scope; Maintainers may access those classes and `Restricted` evidence only
+  with explicit purpose, approval, and step-up authentication; Administrators
+  may use the same audited approval path for `Restricted` evidence. These
+  rules are enforced server-side and are not inferred from the UI.
 - Separate credentials for:
   1. Copilot/model access;
   2. SCM read and repository clone/archive acquisition;
@@ -941,7 +956,9 @@ unredacted model/tool context.
   repository/project authorization for every adapter.
 - Store secret references in Rook and values in the platform secret manager.
   Never place secrets in prompts, run envelopes, logs, evidence, or database
-  JSON.
+  JSON. A deterministic `SensitiveDataGuard` must scan and redact or reject
+  payloads before database, object-store, trace, audit, or log persistence;
+  scanning failures fail closed.
 
 ### 10.1.1 Zero Trust decision record
 
@@ -1001,6 +1018,13 @@ Rook's acceptance criteria are:
 - the verifier has no route to the control plane, Copilot broker, model
   credentials, repository/provider credentials, database, or integration
   workers, and holds no signing or reporting credential;
+- verifier egress is deny-by-default. Repository-controlled commands cannot use
+  arbitrary DNS, HTTP, HTTPS, redirects, alternate IP representations, IPv6
+  paths, or proxy bypasses;
+- dependency acquisition uses a trusted prefetch process or an approved,
+  immutable registry/proxy allowlist with controlled DNS, certificate, protocol,
+  and redirect policy. Any exception is explicitly recorded and covered by the
+  containment test suite.
 - the control plane creates runner and verifier Jobs only from a fixed,
   server-owned template with validated parameters; repository content cannot
   choose a privileged workload or namespace;
@@ -1041,7 +1065,10 @@ Rook's acceptance criteria are:
 - Use structured logs, correlation/run IDs, metrics, and OpenTelemetry traces
   across control plane, workflow, agent step, model call, tool call, command,
   and provider operation.
-- Redact before export. Do not retain hidden model reasoning.
+- Apply deterministic sensitive-data detection and redaction before persistence
+  and again before export. Reject secret-bearing payloads when they cannot be
+  safely redacted, and fail closed when scanning is unavailable. Do not retain
+  hidden model reasoning.
 - Store typed summaries and required evidence, not unlimited transcripts.
 - Define retention by evidence class and support legal hold/deletion policy.
 - Test UTF-8/Unicode round trips through UI, API, PostgreSQL, queue state, MCP
@@ -1099,8 +1126,10 @@ than invented assumptions.
 - Copilot user authentication in ephemeral containers is unproven: complete the
   authentication/licensing spike before selecting the production credential
   flow.
-- Package restore egress can be broad: maintain approved registries/proxies and
-  workflow-specific network policy.
+- Package restore uses a trusted prefetch process or an approved immutable
+  registry/proxy allowlist. The verifier has no arbitrary internet or DNS
+  egress, and redirects, alternate IPs, IPv6 paths, and proxy bypasses are
+  denied and covered by the containment test suite.
 - OpenShift operations require platform skills: provide runbooks, dashboards,
   quotas, and tested failure recovery before onboarding critical repositories.
 
@@ -1375,12 +1404,12 @@ command. A duplicate idempotency key returns the original command result.
 | `PolicyVersion` | immutable JSON document, schema version, digest, effective time, superseded-by | retain while referenced by any run |
 | `PackageProvenance` | Crow/Raven name, version, source ref, SHA-256, attestation result, approved/rollback status | retain while referenced and for evidence period |
 | `Run` | repository, workflow, target SHA, state, reason code, attempt, policy/package/model/credential references, timestamps, row version | pilot evidence retention; duration remains a production decision |
-| `RunStep` | run, step type, contract version, status, payload reference/hash, started/completed times | same as run; large payload stays outside ordinary logs |
+| `RunStep` | run, step type, contract version, status, bounded pre-redacted summary, payload reference/hash, started/completed times | same as run; raw or secret-bearing payloads never persist and large payload stays outside ordinary logs |
 | `ProviderObservation` | repository, provider/binding, normalized state, source ID, observed-at, fetched-at, freshness state, payload hash | latest plus history needed to explain runs |
 | `Finding` | stable fingerprint, source, severity, applicability, state, first/last seen | until resolved plus audit retention |
 | `Hold` | scope, reason, owner, start, optional expiry/release condition, active flag | active plus history |
 | `ManualPriority` | repository/run scope, P0-P4, optional rank, reason, actor, expiry | active plus history |
-| `EvidenceItem` | run, kind, media type, byte count, object key, SHA-256, source, classification, created time | object retention policy; never stores a secret-bearing URL |
+| `EvidenceItem` | run, kind, media type, byte count, object key, SHA-256, source, classification (`Internal`, `Confidential`, or `Restricted`), created time, publication-scan result | object retention policy; class-aware authorization and restricted-content handling are mandatory; never stores a secret-bearing URL |
 | `AuditEvent` | actor/workload, action, resource reference, outcome/reason, correlation, occurred-at | append-only; privacy-minimized |
 | `OutboxMessage` | type, aggregate, payload version, occurred/available/processed times, attempt and error code | delete/archive only after proven processing retention |
 | `Lease` | resource, owner, acquired/expiry times, fencing token | transient; fencing token must increase |
@@ -1405,7 +1434,7 @@ supplementary-plane characters.
 | `POST /repositories/{id}/holds` / `POST /holds/{id}/release` | create/release hold | Operator | requires reason and release condition/expiry |
 | `POST /repositories/{id}/priority` | set expiring manual priority | Operator | requires reason; preserves prior value in audit |
 | `POST /admin/pause` / `POST /admin/resume` | fleet-wide safety control | Administrator | confirmation, reason, current-state check, and audit required |
-| `GET /evidence/{id}` | authorized evidence download | Viewer with repository scope | short-lived server-streamed response; no object-store URL exposure |
+| `GET /evidence/{id}` | authorized evidence download | repository scope plus evidence-class authorization | short-lived server-streamed attachment with allowlisted media type, `X-Content-Type-Options: nosniff`, no active-content rendering, and no object-store URL exposure; denied when publication scanning or integrity checks fail |
 
 Phase 1 does not expose provider publication endpoints. The GitHub adapter
 interface has separate read and write ports; only the read implementation is

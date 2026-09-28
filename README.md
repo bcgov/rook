@@ -6,5 +6,9 @@ skills, Raven MCP servers, and initially the GitHub Copilot SDK.
 Per-application source control and CI/CD are configured independently, with an
 initial on-premises Azure DevOps Server and Azure DevOps Pipelines pilot.
 
-The current architecture and delivery plan is in
-[docs/orchestration-framework-plan.md](docs/orchestration-framework-plan.md).
+Start with the
+[orchestration framework plan](docs/orchestration-framework-plan.md). Detailed
+documents cover the
+[solution architecture](docs/orchestration-framework-solution-architecture.md),
+[UX design](docs/orchestration-framework-ux-design.md), and
+[implementation tasks](docs/orchestration-framework-tasks.md).

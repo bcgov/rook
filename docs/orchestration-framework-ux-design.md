@@ -199,8 +199,8 @@ Configuration
 Workflow / policy / model / Crow / Raven / credential-profile references
 
 Evidence
-| Kind | Source | Created | Size | Integrity | Action |
-| ...  | ...    | ...     | ...  | Verified  | Download |
+| Kind | Source | Classification | Created | Size | Integrity | Action |
+| ...  | ...    | Internal       | ...     | ...  | Verified  | Download |
 
 Audit history
 Timestamp | Actor/workload | Action | Outcome/reason

@@ -143,7 +143,7 @@ terminate abusive work, evidence is bounded, and Job cleanup is observable.
 - [ ] T041 [US5] Implement signed envelope validation for audience, expiry, nonce, template digest, and replay in `spikes/Rook.ContainmentProbe/EnvelopeValidator.cs`
 - [ ] T042 [US5] Implement bounded output collection and cleanup reporting in `spikes/Rook.ContainmentProbe/ResultCollector.cs`
 - [ ] T043 [P] [US5] Add filesystem, symlink, host mount, container socket, and workspace isolation tests in `spikes/Rook.SpikeTests/FilesystemContainmentTests.cs`
-- [ ] T044 [P] [US5] Add egress, DNS, redirect, alternate-IP, IPv6, proxy-bypass, broker impersonation/exhaustion, control-plane, provider, and database route tests against the production verifier policy in `spikes/Rook.SpikeTests/NetworkContainmentTests.cs`
+- [ ] T044 [P] [US5] Add egress, DNS, redirect, alternate-IP, IPv6, proxy-bypass, broker impersonation/exhaustion, control-plane, provider, and database route tests against the spike verifier policy created by T040 in `spikes/Rook.SpikeTests/NetworkContainmentTests.cs`; production-policy verification is required by T123
 - [ ] T045 [P] [US5] Add process fork, CPU, memory, disk, timeout, output-size, and cleanup tests in `spikes/Rook.SpikeTests/ResourceContainmentTests.cs`
 - [ ] T046 [P] [US5] Add secret, service-account token, environment, and projected-identity tests in `spikes/Rook.SpikeTests/CredentialContainmentTests.cs`
 - [ ] T047 [US5] Execute the adversarial suite in Emerald and record redacted results in `docs/spikes/containment-test-report.md`
@@ -333,13 +333,16 @@ read-only status remains available.
 - [ ] T118 Inventory pilot portfolio operating systems, SDKs, package managers, build commands, pipeline shapes, Unicode needs, and Linux-runner eligibility in `docs/pilot/toolchain-inventory.md`
 - [ ] T119 Record common-component decisions for identity, secrets, ingress/Jobs, PostgreSQL/backup, evidence, telemetry, notifications, and registry/signing with owner, evidence date, degradation, and exit path in `docs/architecture/common-components.md`
 - [ ] T120 Execute lint, build, unit, integration, architecture, end-to-end, accessibility automation, and dependency/security scans and record tool versions plus manual accessibility checks in `docs/pilot/verification-report.md`
-- [ ] T121 Execute the authorized GitHub pilot, prove all provider write canaries unchanged, reconcile the final run, and record evidence in `docs/pilot/read-only-assessment-report.md`
-- Security prerequisite tasks T123-T127 must be complete before T122 is executable.
 - [ ] T123 [SEC-001] Define and verify deny-by-default verifier egress, approved registry/proxy destinations, DNS restrictions, redirect handling, and repository-exfiltration tests in `deploy/base/verifier/network-policy.yaml`, `src/Rook.Contracts/VerifierEgressPolicy.cs`, and `tests/Rook.IntegrationTests/Containment/VerifierEgressTests.cs`
 - [ ] T124 [SEC-002] Define and enforce repository-to-model data-boundary policy, including classification, residency, permitted providers, prohibited content classes, and fail-closed preflight checks in `src/Rook.Contracts/DataBoundaryPolicy.cs`, `src/Rook.Domain/Repositories/RepositoryProfile.cs`, `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`, and `tests/Rook.IntegrationTests/DataBoundary/DataBoundaryPolicyTests.cs`
 - [ ] T125 [SEC-003] Implement evidence-class authorization, restricted-evidence handling, safe download headers, media-type allowlisting, and class-based authorization tests in `src/Rook.Application/Evidence/EvidenceAuthorization.cs`, `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`, and `tests/Rook.IntegrationTests/Evidence/EvidenceAuthorizationTests.cs`
 - [ ] T126 [SEC-004] Implement fail-closed pre-persistence sensitive-data detection and redaction for run-step reports, evidence, logs, traces, and audit payloads in `src/Rook.Application/Security/SensitiveDataGuard.cs`, `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`, and `tests/Rook.IntegrationTests/Security/SensitiveDataGuardTests.cs`
+- Security implementation tasks T123-T126 must be complete before the authorized
+  pilot T121 can execute.
+- [ ] T121 Execute the authorized GitHub pilot only after T123-T126 pass, prove all provider write canaries unchanged, reconcile the final run, and record evidence in `docs/pilot/read-only-assessment-report.md`
 - [ ] T127 [SEC-GATE] Resolve pilot security ownership and acceptance records for OIDC outage behavior, OpenShift egress, evidence classification/retention, backup/restore, and T123-T126 residual risks in `docs/pilot/security-decision-record.md` and `docs/pilot/phase-1-exit-decision.md`
+- Security evidence and decision task T127 must be complete before T122 is
+  executable.
 
 - [ ] T122 Add a `PilotGate` test category, execute its documented command, and record T123-T127 acceptance evidence, pilot owner acceptance, open decisions, residual risks, measured operations, repository-mutation proof, and Phase 1 go/no-go in `tests/Rook.EndToEndTests/PilotGateTests.cs` and `docs/pilot/phase-1-exit-decision.md`
 

@@ -81,6 +81,9 @@ Phase 2 adds evidence-gated draft pull requests for human review.
   roles plus repository- and operation-level policy.
 - Phase 1 may read repository and GitHub Actions state but may not commit,
   push, comment, label, dispatch workflows, or create pull requests.
+- Phase 1 supports onboarding and manual provider refresh. Repository
+  offboarding, binding/policy editing, and role-mapping administration are
+  deferred beyond the read-only pilot.
 
 ## Open implementation decisions
 

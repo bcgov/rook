@@ -67,12 +67,18 @@ order match the visual order. The shell works without client-side JavaScript.
 | Download authorized evidence | Yes | Yes | Yes | Yes |
 | Refresh provider status; start/cancel assessment | No | Yes | Yes | Yes |
 | Create/release repository hold; set expiring priority override | No | Yes | Yes | Yes |
-| Onboard/offboard repository; edit bindings and policy | No | No | Yes | Yes |
-| Manage role mappings and fleet pause/resume | No | No | No | Yes |
+| Onboard repository | No | No | Yes | Yes |
+| Pause/resume the fleet | No | No | No | Yes |
 
 Disabled controls are used only when explaining a temporarily unavailable
 action helps the operator. A control the subject can never use is omitted.
 Server-side authorization applies in every case.
+
+Repository offboarding, provider-binding edits, policy editing, and
+role-mapping administration are deferred beyond Phase 1. The pilot consumes
+externally provisioned OIDC claim/group mappings and the immutable
+binding/policy configuration confirmed during onboarding; the operator console
+does not imply that those values are editable.
 
 ## 5. Screen A - Portfolio
 
@@ -141,6 +147,10 @@ Policy and package versions to use
   dispatch workflows, or create pull requests.
 - Existing repository detail uses ordinary page sections for Overview,
   Provider status, Policy, Runs, Holds, and Audit.
+- An Operator can request a read-only provider refresh from Provider status.
+  The action uses POST-redirect-GET, joins an equivalent active refresh, and
+  keeps the last observation labelled stale or unavailable until a newer
+  observation is durably recorded.
 - If tabs are later justified, they remain ordinary links to distinct URLs.
 
 ## 7. Screen C - Start assessment
@@ -243,7 +253,9 @@ Expires [yyyy-mm-dd hh:mm]
 | --- | --- |
 | Loading or pending | Name what is loading, preserve navigation, prevent duplicate submission, and provide a manual refresh path |
 | Empty | Explain why no records are present and show the permitted primary action |
-| Success | Confirm the completed operation and link to its durable result |
+| Assessment complete | Show `AssessmentComplete`, summarize one or more findings, link typed evidence, and state that Phase 1 made no repository change |
+| No change | Show `NoChange`, explain that no actionable findings were recorded, and link the completed assessment evidence |
+| Other success | Confirm the completed operation and link to its durable result |
 | Validation error | Focus an error summary linked to fields, retain safe input, and put specific errors beside fields |
 | Unauthorized | Explain that access is unavailable and provide the approved support path without revealing resource existence |
 | Blocked or held | Show reason code, owner, release condition or expiry, and permitted next action |

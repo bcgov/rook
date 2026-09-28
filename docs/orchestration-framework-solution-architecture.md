@@ -209,8 +209,12 @@ flowchart LR
 - **Model boundary:** Prompts and source may leave the Rook environment through
   the configured provider. Onboarding must record data classification and the
   provider policy approved for that repository.
-- **Database boundary:** The control plane is the sole database writer and owns
-  schema migrations. Runners have no database network path or credential.
+- **Database boundary:** `Rook.Web` and the trusted `Rook.Worker` are the only
+  application workloads that write the database. Both use the same
+  application persistence boundary, but separate least-privileged database
+  credentials and network policies. A dedicated migration identity owns DDL;
+  the worker is limited to required business-state, observation, outbox, and
+  lease operations. Runners have no database network path or credential.
 
 ## 5. Logical components
 
@@ -520,9 +524,10 @@ policy rather than silently assigning a benign default.
 
 ### 6.1 Run and change-proposal state machines
 
-A run is bounded by one automation attempt series and ends when a proposal is
-published. Human review is a separate, potentially long-lived lifecycle owned
-by `ChangeProposal`.
+A run is bounded by one automation attempt series and ends with a read-only
+assessment result or, in later phases, when a proposal is published. Human
+review is a separate, potentially long-lived lifecycle owned by
+`ChangeProposal`.
 
 ```mermaid
 stateDiagram-v2
@@ -546,7 +551,9 @@ stateDiagram-v2
     Reviewing --> Cancelled
     Publishing --> Cancelled
     Preparing --> Blocked
+    Assessing --> AssessmentComplete: Phase 1 findings recorded
     Assessing --> NoChange
+    Assessing --> Failed
     Planning --> Blocked
     Implementing --> Failed
     Verifying --> Failed
@@ -554,6 +561,7 @@ stateDiagram-v2
     Publishing --> Failed
     Failed --> Queued: retry approved after backoff
     Failed --> [*]: attempt cap reached
+    AssessmentComplete --> [*]
     Blocked --> [*]
     NoChange --> [*]
     Rejected --> [*]
@@ -578,6 +586,13 @@ Every transition is:
 - accompanied by a timestamp, actor, reason, and evidence references;
 - safe to retry using the applicable identity key;
 - emitted through an outbox event in the same transaction.
+
+`AssessmentComplete` is the successful Phase 1 terminal when the read-only
+assessment records one or more findings with versioned typed outputs and
+evidence. It does not authorize planning, implementation, publication, or any
+repository mutation. `NoChange` is the successful terminal when the assessment
+finds no actionable work. `Published` is available only to Phase 2 and later
+workflows.
 
 Use two identities:
 
@@ -1340,7 +1355,7 @@ silently add checkpoint storage while executing the typed-output design below.
    requires execution, the run is `Blocked` rather than broadening authority.
 7. The worker reconciles Job and provider state. The UI reads materialized
    queries and exposes source/freshness, pending, stale, unavailable, blocked,
-   cancelled, failed, no-change, and completed outcomes distinctly.
+   cancelled, failed, `NoChange`, and `AssessmentComplete` outcomes distinctly.
 
 If a runner terminates without its final report, reconciliation uses the Job
 condition, last heartbeat, cancellation request, and a configurable termination
@@ -1395,6 +1410,13 @@ supplementary-plane characters.
 Phase 1 does not expose provider publication endpoints. The GitHub adapter
 interface has separate read and write ports; only the read implementation is
 registered.
+
+Phase 1 supports onboarding and manual read-only provider refresh, but defers
+repository offboarding, provider-binding edits, policy editing, and role-mapping
+administration. OIDC claim/group-to-role mappings are externally provisioned
+and validated configuration for the pilot; they are not editable through the
+operator console. The deferred operations require explicit contracts,
+authorization, audit, UX, and tests before production use.
 
 #### 13.2.7 Reliability, telemetry, and degradation
 

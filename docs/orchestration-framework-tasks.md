@@ -168,6 +168,11 @@ observe explicit GitHub Actions state, start or cancel one read-only
 assessment, inspect evidence and audit history, and manage holds and priority
 without repository mutation.
 
+Repository offboarding, provider-binding edits, policy editing, and
+role-mapping administration are deferred beyond Phase 1 and are not part of
+its exit gate. The pilot consumes externally provisioned OIDC role mappings
+and immutable binding/policy configuration confirmed during onboarding.
+
 ### 4.1 Entry prerequisites
 
 Before T050:
@@ -197,8 +202,8 @@ Local fakes may be created without those approvals, but a pilot must not start.
 - [ ] T058 [P] Define versioned run envelope, step output, evidence, provider observation, and progress contracts in `src/Rook.Contracts/RunContracts.cs` and `src/Rook.Contracts/ProviderContracts.cs`
 - [ ] T059 [P] Define application command/query ports, clock, current subject, unit of work, evidence store, provider reader, Job launcher, and agent backend interfaces in `src/Rook.Application/Abstractions/ApplicationPorts.cs`
 - [ ] T060 Implement repository profile, policy/package provenance, run/step/finding, hold/priority, and provider observation aggregates in `src/Rook.Domain/Repositories/RepositoryProfile.cs`, `src/Rook.Domain/Runs/Run.cs`, `src/Rook.Domain/Controls/RepositoryControls.cs`, and `src/Rook.Domain/Providers/ProviderObservation.cs`
-- [ ] T061 Implement allowed run and change-proposal transition tables with reason/evidence requirements in `src/Rook.Domain/Runs/RunStateMachine.cs` and `src/Rook.Domain/Changes/ChangeProposalStateMachine.cs`
-- [ ] T062 [P] Add domain tests for invariants, transitions, Unicode values, holds, priority expiry, cancellation, and deduplication keys in `tests/Rook.UnitTests/Domain/DomainInvariantTests.cs`
+- [ ] T061 Implement allowed run and change-proposal transition tables, including terminal `AssessmentComplete` for findings and `NoChange` for no actionable findings, with reason/evidence requirements in `src/Rook.Domain/Runs/RunStateMachine.cs` and `src/Rook.Domain/Changes/ChangeProposalStateMachine.cs`
+- [ ] T062 [P] Add domain tests for invariants, `AssessmentComplete`/`NoChange` transitions, Unicode values, holds, priority expiry, cancellation, and deduplication keys in `tests/Rook.UnitTests/Domain/DomainInvariantTests.cs`
 - [ ] T063 Configure EF Core mappings, UTC handling, optimistic concurrency, partial uniqueness, JSON schema versions, and UTF-8 assumptions in `src/Rook.Infrastructure/Persistence/RookDbContext.cs`
 - [ ] T064 Create the initial PostgreSQL migration for the minimum schema in `src/Rook.Infrastructure/Persistence/Migrations/InitialCreate.cs`
 - [ ] T065 [P] Implement append-only audit event and transactional outbox persistence in `src/Rook.Infrastructure/Persistence/Audit/AuditEventWriter.cs` and `src/Rook.Infrastructure/Persistence/Outbox/OutboxWriter.cs`
@@ -241,9 +246,9 @@ stale or unavailable; no GitHub write API is reachable.
 - [ ] T080 [P] [US7] Add fixture and approved-sandbox contract tests for mapping, no-pipeline, stale, unavailable, pagination, cancellation, and read-only surface in `tests/Rook.IntegrationTests/GitHub/GitHubObservationContractTests.cs`
 - [ ] T081 [US7] Implement repository discovery, review, confirmation, duplicate-binding prevention, and audit commands in `src/Rook.Application/Repositories/Onboarding/OnboardRepositoryCommandHandler.cs`
 - [ ] T082 [US7] Implement `GET /repositories/new`, review, and confirmation Razor Pages with antiforgery, error summary, persistent labels, and no-JavaScript operation in `src/Rook.Web/Pages/Repositories/Onboarding/New.cshtml` and `src/Rook.Web/Pages/Repositories/Onboarding/Review.cshtml`
-- [ ] T083 [US7] Implement repository detail queries with overview, provider freshness, eligibility reasons, policy/package versions, runs, holds, and audit in `src/Rook.Application/Repositories/Details/GetRepositoryDetailsQuery.cs`
-- [ ] T084 [US7] Implement the repository detail Razor Page and responsive sections in `src/Rook.Web/Pages/Repositories/Details.cshtml` and `src/Rook.Web/Pages/Repositories/Details.cshtml.cs`
-- [ ] T085 [P] [US7] Add onboarding authorization, validation, duplicate-submit, Unicode, outage, and accessibility tests in `tests/Rook.EndToEndTests/Repositories/RepositoryOnboardingTests.cs`
+- [ ] T083 [US7] Implement repository detail queries and an idempotent manual read-only provider-refresh command with overview, freshness, eligibility reasons, policy/package versions, runs, holds, and audit in `src/Rook.Application/Repositories/Details/GetRepositoryDetailsQuery.cs` and `src/Rook.Application/Repositories/Refresh/RefreshRepositoryStatusCommandHandler.cs`
+- [ ] T084 [US7] Implement the repository detail Razor Page, responsive sections, and authorized POST-redirect-GET provider-refresh action in `src/Rook.Web/Pages/Repositories/Details.cshtml` and `src/Rook.Web/Pages/Repositories/Details.cshtml.cs`
+- [ ] T085 [P] [US7] Add onboarding and manual-refresh authorization, active-refresh joining, validation, duplicate-submit, Unicode, stale/unavailable, and accessibility tests in `tests/Rook.EndToEndTests/Repositories/RepositoryOnboardingTests.cs` and `tests/Rook.EndToEndTests/Repositories/RepositoryRefreshTests.cs`
 
 ### 4.6 User Story 8 - monitor and filter the portfolio
 
@@ -271,16 +276,16 @@ typed evidence; holds, stale credentials, ineligible tools, package mismatch,
 duplicate submission, cancellation, timeout, and unavailable providers reach
 the specified non-success state and produce no repository write.
 
-- [ ] T090 [US9] Implement assessment preflight, active-run deduplication, policy/package/credential resolution, and idempotent start command in `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`; success requires versioned Observe/Assess outputs, terminal state, evidence completion, and audit, while zero findings produces an explained `NoChange`
+- [ ] T090 [US9] Implement assessment preflight, active-run deduplication, policy/package/credential resolution, and idempotent start command in `src/Rook.Application/Runs/StartAssessment/StartAssessmentCommandHandler.cs`; one or more findings produce terminal `AssessmentComplete`, zero actionable findings produce terminal `NoChange`, and both require versioned Observe/Assess outputs, evidence completion, and audit
 - [ ] T091 [US9] Implement the preflight review and POST-redirect-GET assessment Razor Pages in `src/Rook.Web/Pages/Repositories/Assessments/New.cshtml` and `src/Rook.Web/Pages/Repositories/Assessments/New.cshtml.cs`
 - [ ] T092 [US9] Implement signed run envelope creation and fixed-template parameter validation in `src/Rook.Infrastructure/OpenShift/RunEnvelopeFactory.cs` and `src/Rook.Infrastructure/OpenShift/RunnerJobFactory.cs`
 - [ ] T093 [P] [US9] Define the unprivileged fixed runner Job, service account, quotas, deadlines, and network policies in `deploy/base/runner/job.yaml`, `deploy/base/runner/service-account.yaml`, and `deploy/base/runner/network-policy.yaml`
 - [ ] T094 [US9] Implement Phase 1 envelope validation, run budgets, typed progress submission, and terminal reporting with no repository command execution in `src/Rook.Runner/Program.cs`
 - [ ] T095 [US9] Implement the pinned Copilot `IAgentBackend` and separately composed Agent Framework/Crow read-only workflow in `src/Rook.AgentFramework/Copilot/CopilotAgentBackend.cs` and `src/Rook.AgentFramework/Workflows/ReadOnlyAssessmentWorkflow.cs`
 - [ ] T096 [US9] Implement leased outbox dispatch, Job launch, heartbeat timeout, cancellation forwarding, and reconciliation of missing/terminated Jobs after a configurable grace period in `src/Rook.Worker/Runs/RunWorker.cs`
-- [ ] T097 [P] [US9] Add unit tests for preflight, deduplication, state transitions, package mismatch, hold, credential failure, timeout, and cancellation in `tests/Rook.UnitTests/Runs/StartAssessmentTests.cs`
+- [ ] T097 [P] [US9] Add unit tests for preflight, deduplication, `AssessmentComplete`, `NoChange`, package mismatch, hold, credential failure, timeout, and cancellation in `tests/Rook.UnitTests/Runs/StartAssessmentTests.cs`
 - [ ] T098 [P] [US9] Add contract tests proving the Phase 1 agent/provider surface cannot commit, push, comment, label, dispatch, or create a pull request in `tests/Rook.IntegrationTests/ReadOnlyAssessment/ReadOnlySurfaceTests.cs`
-- [ ] T099 [US9] Add an end-to-end disposable-repository assessment for success, no-change, duplicate start, blocked, failure, and cancellation in `tests/Rook.EndToEndTests/Assessments/AssessmentJourneyTests.cs`
+- [ ] T099 [US9] Add end-to-end disposable-repository assessments for findings ending in `AssessmentComplete`, zero findings ending in `NoChange`, duplicate start, blocked, failure, and cancellation in `tests/Rook.EndToEndTests/Assessments/AssessmentJourneyTests.cs`
 
 ### 4.8 User Story 10 - inspect run progress and evidence
 
@@ -295,10 +300,10 @@ not move focus or spam announcements.
 
 - [ ] T100 [US10] Implement scoped run detail, timeline, configuration, audit, and evidence queries in `src/Rook.Application/Runs/Details/GetRunDetailsQuery.cs`
 - [ ] T101 [US10] Implement evidence metadata persistence, SHA-256 verification, bounded upload, authorized streaming download, and retention hooks in `src/Rook.Infrastructure/Evidence/EvidenceStore.cs`; deny mismatched downloads, flag the run evidence as failed, audit the integrity reason, and offer reassessment rather than treating the evidence as usable
-- [ ] T102 [US10] Implement the run detail Razor Page with timeline, provenance, freshness, evidence integrity, audit history, ordinary refresh, and terminal-state content in `src/Rook.Web/Pages/Runs/Details.cshtml` and `src/Rook.Web/Pages/Runs/Details.cshtml.cs`
+- [ ] T102 [US10] Implement the run detail Razor Page with distinct `AssessmentComplete`, `NoChange`, and failure content plus timeline, provenance, freshness, evidence integrity, audit history, and ordinary refresh in `src/Rook.Web/Pages/Runs/Details.cshtml` and `src/Rook.Web/Pages/Runs/Details.cshtml.cs`
 - [ ] T103 [P] [US10] Add progressive polling that pauses when hidden, respects user preferences, updates a polite atomic status region only when status or active step changes, and stops at terminal state in `src/Rook.Web/Scripts/run-status.js`
 - [ ] T104 [P] [US10] Add authorization, hash mismatch, missing payload, size limit, stale source, and retention tests in `tests/Rook.IntegrationTests/Evidence/EvidenceStoreTests.cs`
-- [ ] T105 [P] [US10] Add run-state content, focus stability, live-region, no-JavaScript, keyboard, reflow, and screen-reader smoke tests in `tests/Rook.EndToEndTests/Runs/RunDetailsAccessibilityTests.cs`
+- [ ] T105 [P] [US10] Add distinct `AssessmentComplete`/`NoChange`/failure content, focus stability, live-region, no-JavaScript, keyboard, reflow, and screen-reader smoke tests in `tests/Rook.EndToEndTests/Runs/RunDetailsAccessibilityTests.cs`
 
 ### 4.9 User Story 11 - manage holds, overrides, cancellation, and fleet pause
 
@@ -320,7 +325,7 @@ read-only status remains available.
 ### 4.10 Operational completion and pilot gate
 
 - [ ] T112 Implement startup migration compatibility checks, separate liveness/readiness, graceful shutdown, and bounded worker backpressure in `src/Rook.Web/Health/HealthConfiguration.cs` and `src/Rook.Worker/Program.cs`
-- [ ] T113 [P] Define control-plane, worker, PostgreSQL, ingress, secrets references, default-deny network policy, quotas, and Pod security in `deploy/base/kustomization.yaml` and its explicitly listed resource manifests
+- [ ] T113 [P] Define control-plane, worker, PostgreSQL, ingress, separate least-privileged web/worker/migration database identities and secret references, default-deny network policy, quotas, and Pod security in `deploy/base/kustomization.yaml` and its explicitly listed resource manifests
 - [ ] T114 [P] Define the Emerald pilot overlay with no literal secrets and read-only GitHub permissions in `deploy/overlays/emerald-pilot/kustomization.yaml`
 - [ ] T115 Implement PostgreSQL backup, restore, and integrity-check procedures in `ops/postgresql/backup.ps1`, `ops/postgresql/restore.ps1`, and `docs/runbooks/postgresql-recovery.md`
 - [ ] T116 [P] Create provider outage, stuck run, cancellation, package rollback, credential revocation, fleet pause, evidence mismatch, and orphan Job cleanup procedures in `docs/runbooks/operator-incidents.md`
@@ -388,7 +393,7 @@ flowchart LR
 2. After T061, run T062 domain tests, T063 persistence mappings, and T065
    audit/outbox work in parallel.
 3. During US7, run T080 provider contract tests in parallel with T082 Razor
-   Pages only after T078-T081 establish shared contracts.
+   Pages after T078, T079, and T081 establish the shared contracts.
 4. During US10, run evidence tests T104 and UX tests T105 in parallel after
    T100-T103 are complete.
 
@@ -407,6 +412,9 @@ flowchart LR
 
 ### 6.1 Phase 2 - draft PR maintenance
 
+- Add repository offboarding, provider-binding and policy editing, and
+  role-mapping administration with explicit authorization, audit, UX, and
+  tests before production use.
 - Add dependency and framework update workflows.
 - Add isolated implementation, deterministic verification, independent review,
   branch push, and draft PR creation.
